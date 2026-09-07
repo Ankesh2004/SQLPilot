@@ -14,7 +14,7 @@
 |---|---|---|---|
 | 0 | **Foundation** | Project structure, configs, dev environment | ✅ Done |
 | 1 | **Core Pipeline** | Question → SQL → Result (no clarification, no RAG) | ✅ Done |
-| 2 | **RAG Layer** | Schema & knowledge base retrieval | 🔲 Not Started |
+| 2 | **RAG Layer** | Schema & knowledge base retrieval | ✅ Done |
 | 3 | **Clarification Engine** | Ambiguity detection + follow-up questions | 🔲 Not Started |
 | 4 | **Self-Correction & Validation** | SQLGlot validation + retry loops | 🔲 Not Started |
 | 5 | **Self-Consistency** *(post-MVP)* | Multi-candidate generation + voting | 🔲 Not Started |
@@ -81,26 +81,29 @@
 **Goal**: Replace hardcoded schema context with dynamic retrieval from a vector store.
 
 ### Tasks
-- [ ] Implement schema introspection
+- [x] Implement schema introspection (`app/rag/schema_introspector.py`)
   - Connect to SQLite demo DB, read all tables/columns/types/FKs
   - Generate chunked schema documents (one per table)
-  - Include sample values for categorical columns
-- [ ] Implement knowledge base indexing
+  - Include sample values for categorical columns (low-cardinality auto-detected)
+- [x] Implement knowledge base indexing
   - Read markdown files from `knowledge_base/` directory
-  - Chunk and embed them using sentence-transformers (all-MiniLM-L6-v2)
-- [ ] Set up ChromaDB (in-process, persistent storage)
-  - Create two collections: `schema_chunks` and `business_rules`
-  - Implement embedding pipeline using sentence-transformers
-- [ ] Implement retrieval
-  - Given a user question, retrieve top-K schema chunks + business rules
-  - Inject retrieved context into the LLM prompt
-- [ ] Write `scripts/index_rag.py` to run the full indexing pipeline
-- [ ] Test: verify that retrieval finds the right tables for various questions
+  - ChromaDB default embedding (all-MiniLM-L6-v2) handles encoding
+- [x] Set up ChromaDB (`app/rag/store.py`, in-process, persistent at `data/chroma/`)
+  - Two collections: `schema_chunks` and `business_rules`
+  - Full re-index on each run (schema is small, keeps it simple)
+- [x] Implement retrieval (`app/rag/retriever.py`)
+  - Retrieve top-K schema chunks + business rules
+  - Distance-based filtering for rules (< 1.0 cosine distance)
+  - Graceful fallback to DB introspection if index is empty
+- [x] Write `scripts/index_rag.py` to run the full indexing pipeline
+  - Includes sanity check with test queries
+- [x] Test: verified retrieval finds right tables + rules for MRR, support tickets, resolution time
 
 ### Deliverables
-- Schema auto-indexed from SQLite demo database
-- Business rules indexed from `knowledge_base/*.md` files
-- LLM prompt now uses retrieved context (ChromaDB) instead of hardcoded schema
+- [x] Schema auto-indexed from SQLite demo database (7 tables)
+- [x] Business rules indexed from `knowledge_base/*.md` files (6 rules)
+- [x] LLM prompt now uses retrieved context (ChromaDB) instead of hardcoded schema
+- [x] Pipeline uses business rules (tested: MRR query correctly follows knowledge base definition)
 
 ---
 

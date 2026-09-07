@@ -4,7 +4,7 @@ Prompt templates for the SQL generation pipeline.
 keeping all prompts in one place so they're easy to iterate on.
 """
 
-# --- Phase 1: SQL generation (no RAG, hardcoded schema) ---
+# --- SQL generation ---
 
 SQL_GENERATION_SYSTEM = """You are a SQL expert. Your job is to convert natural language questions into SQL queries.
 
@@ -15,6 +15,7 @@ Rules:
 - Use aliases for readability.
 - If a question asks for "top N", use LIMIT.
 - If a question involves dates, use {dialect}-appropriate date functions.
+- If business rules are provided, follow them exactly for metric definitions.
 - Always respond in JSON format with exactly these fields:
   {{
     "sql": "your SQL query here",
@@ -24,6 +25,9 @@ Rules:
 
 SQL_GENERATION_USER = """## Database Schema
 {schema}
+
+## Business Rules & Definitions
+{business_rules}
 
 ## Question
 {question}
