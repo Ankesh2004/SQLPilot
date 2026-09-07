@@ -300,6 +300,233 @@ Even if the LLM tries to hide a `DROP TABLE` inside a subquery, AST traversal ca
 - Limit `max_rows` returned (e.g., 1000) to prevent memory issues
 - Optional: `SET work_mem = '64MB'` to limit per-query resource usage
 
+### 7.4 Self-Correction Loop Engineering
+
+This is the most critical piece of the pipeline to get right. LLMs are probabilistic — they *will* produce broken SQL. The question is how we recover from it systematically instead of failing or looping forever.
+
+> **References**: Google Cloud's "Techniques for improving text-to-SQL" emphasizes that no amount of prompt engineering eliminates 100% of errors — build a system that *expects* and recovers from them. The AWS self-correction architecture and LinkedIn CRM case study both confirm this pattern.
+
+#### 7.4.1 The Three Correction Loops
+
+Our pipeline has three distinct loops, each with different triggers, retry budgets, and escalation paths:
+
+```
+                    ┌─────────────────────────────────────────────────┐
+                    │              LOOP 1: SYNTAX FIX                 │
+                    │  SQLGlot parse error → re-prompt LLM            │
+                    │  Budget: 2 attempts                             │
+                    │  Cheap: no DB call, no API cost beyond LLM      │
+                    └───────────┬─────────────────────────────────────┘
+                                │ passes validation
+                                ▼
+                    ┌─────────────────────────────────────────────────┐
+                    │           LOOP 2: RUNTIME FIX                   │
+                    │  DB execution error → re-prompt LLM             │
+                    │  Budget: 2 attempts                             │
+                    │  Expensive: each attempt hits the database       │
+                    └───────────┬─────────────────────────────────────┘
+                                │ succeeds OR budget exhausted
+                                ▼
+                    ┌─────────────────────────────────────────────────┐
+                    │           LOOP 3: CLARIFICATION                 │
+                    │  Ambiguous → ask user → re-evaluate             │
+                    │  Budget: 2 rounds                               │
+                    │  Human-in-the-loop (via LangGraph interrupt)    │
+                    └─────────────────────────────────────────────────┘
+```
+
+**Why separate loops instead of one big retry counter?**
+A single `retry_count` conflates fundamentally different failure modes. A syntax error (Loop 1) is a cheap, fast fix — the LLM just needs to close a parenthesis. A runtime error (Loop 2) means the SQL *looked* valid but referenced a wrong column — that's a harder problem. Lumping them together means a query that takes 2 syntax fixes would already have "used up" retries before it even hits the database. Separate budgets let each loop exhaust its own recovery space.
+
+**Why 2 attempts per loop, not 3 or 5?**
+- After 2 correction attempts with full error context, the LLM has already seen the problem and two of its own failed fixes. If it can't solve it in 2 tries, more attempts rarely help — they just burn API quota and user patience.
+- Total worst-case: 2 (syntax) + 2 (runtime) = 4 LLM calls beyond the first. On Gemini Flash free tier (15 RPM), this keeps us under 1 full question per second even in the worst case.
+- The Google/AWS articles both show 2-3 attempts as the sweet spot. We pick the lower bound for MVP and can tune later with data.
+
+#### 7.4.2 Error Classification
+
+Not all errors deserve retries. Some are fixable by rewriting SQL. Others aren't.
+
+| Error Type | Recoverable? | Action | Example |
+|---|---|---|---|
+| **Syntax error** (SQLGlot ParseError) | Yes | Loop 1 — feed parse error to LLM | Missing `)`, bad keyword |
+| **Security violation** (blocked keyword) | **No** | Immediate reject, tell user | `DROP TABLE`, `DELETE FROM` |
+| **Unknown column** (DB runtime) | Yes | Loop 2 — feed DB error + schema context to LLM | `no such column: first_name` |
+| **Unknown table** (DB runtime) | Maybe | Loop 2 — but if table truly doesn't exist, bail after 1 try | `no such table: orders` |
+| **Permission denied** | **No** | Immediate reject, tell user | Read-only role can't write |
+| **Timeout** (statement_timeout) | **No** | Immediate reject — query is too complex, suggest simplifying | Query took >30s |
+| **Connection error** | **No** | Immediate reject — infrastructure problem, not an LLM problem | DB is down |
+
+**Why classify errors instead of retrying everything?**
+- Retrying a `DROP TABLE` rejection is pointless — the LLM will just try again and get blocked again (or worse, find a creative bypass).
+- Retrying a timeout wastes 30 seconds per attempt for a query the DB can't handle regardless.
+- Retrying a permission error teaches the LLM nothing — the fix is on the infrastructure side.
+- Classifying errors upfront avoids wasting retry budget on unwinnable situations.
+
+**Tradeoff**: We're being aggressive about marking things unrecoverable. In theory, a timeout *could* be fixed by simplifying the query. But in practice, LLMs are bad at query optimization — they'll just regenerate something equally expensive. Better to tell the user "this query is too complex" and let them rephrase.
+
+#### 7.4.3 Error History Accumulation
+
+This is where most naive retry loops fail. If you only show the LLM the *latest* error, it has no memory of what it already tried. It can loop on the same mistake or oscillate between two bad approaches.
+
+**Our approach: append-only error log in AgentState.**
+
+```python
+# in AgentState
+correction_history: list[dict]  # each entry is one failed attempt
+
+# each entry looks like:
+{
+    "attempt": 1,
+    "sql": "SELECT first_name FROM customers",
+    "error_type": "runtime",  # "syntax" | "runtime" | "security"
+    "error_message": "no such column: first_name",
+    "stage": "execution"  # "validation" | "execution"
+}
+```
+
+Every failed attempt gets appended. The correction prompt includes the *full history*, so the LLM sees:
+- What it tried
+- Why each attempt failed
+- What NOT to repeat
+
+**Why append-only instead of just "last error"?**
+- Without history, the LLM has no signal about what it already tried. It might flip-flop between `first_name` and `firstName` forever.
+- With history, we can say: "You tried X (failed because Y), then Z (failed because W). Now fix it knowing both of those don't work."
+- This is a direct recommendation from the Google article: structured error feedback outperforms simple text logs.
+
+**Tradeoff**: More history = more tokens in the prompt = more cost per retry. But since we cap retries at 2 per loop (max 4 history entries), the overhead is bounded and small.
+
+#### 7.4.4 Correction Prompt Structure
+
+The correction prompt is the single most important piece of the loop. A bad correction prompt makes retries useless.
+
+```
+SYSTEM: You are a SQL expert. Fix the SQL query based on the error feedback.
+        Use ONLY the schema provided. Do not invent columns or tables.
+
+USER:
+## Original Question
+{user_question}
+
+## Database Schema
+{schema_context}
+
+## Business Rules
+{business_rules_context}
+
+## Target Dialect
+{sql_dialect}
+
+## Previous Attempts (DO NOT repeat these mistakes)
+Attempt 1:
+  SQL: {attempt_1_sql}
+  Error: {attempt_1_error}
+
+Attempt 2:
+  SQL: {attempt_2_sql}
+  Error: {attempt_2_error}
+
+## Instructions
+Generate a corrected SQL query. Respond in JSON:
+{
+  "sql": "...",
+  "assumptions": "...",
+  "what_i_changed": "..."
+}
+```
+
+**Key design decisions in the prompt:**
+
+1. **"DO NOT repeat these mistakes"** — explicit negative instruction. LLMs respond well to being told what NOT to do.
+
+2. **`what_i_changed` field** — forces the LLM to articulate its fix. This is a form of chain-of-thought that improves accuracy. If the LLM can't explain what it changed, it probably didn't fix anything meaningful.
+
+3. **Same schema context on every retry** — don't trim the schema to save tokens during retries. The LLM might have failed because it didn't pay attention to the right column the first time. Fresh full context gives it another chance to notice what it missed.
+
+4. **JSON response format** — same structured output as the initial generation. Keeps parsing consistent.
+
+**Tradeoff**: Including full schema on every retry costs more tokens. But schema is typically 500-2000 tokens, and we only retry 2-4 times max. The accuracy improvement is worth the ~2K extra tokens per retry.
+
+#### 7.4.5 LangGraph Edge Routing (The Actual Flow)
+
+Here's exactly how the LangGraph nodes and conditional edges connect:
+
+```
+generate_sql
+     │
+     ▼
+validate_syntax ──[ParseError]──► increment validation_retry
+     │                                    │
+     │                              [retry ≤ 2?]
+     │                              YES → correct_sql → validate_syntax (loop)
+     │                              NO  → terminal: "syntax_error_unresolved"
+     │
+     │ [valid syntax]
+     ▼
+check_security ──[blocked keyword]──► terminal: "security_violation"
+     │
+     │ [safe]
+     ▼
+execute_query ──[timeout/permission/connection]──► terminal: "unrecoverable_error"
+     │          │
+     │          └──[column/table/runtime error]──► increment execution_retry
+     │                                                │
+     │                                          [retry ≤ 2?]
+     │                                          YES → correct_sql → validate_syntax (loop)
+     │                                          NO  → terminal: "execution_error_unresolved"
+     │
+     │ [success]
+     ▼
+explain_results
+     │
+     ▼
+terminal: "success"
+```
+
+**Important**: After `correct_sql`, we always route back to `validate_syntax`, NOT directly to `execute_query`. Even a correction can introduce new syntax errors. This means the loops are nested — a runtime correction goes through validation again.
+
+**Why route corrections back through validation?**
+- The LLM might "fix" a column name error by writing syntactically invalid SQL.
+- Skipping validation on corrected queries is a common bug in naive retry systems.
+- The cost is one `sqlglot.parse()` call — microseconds, no API or DB cost.
+
+#### 7.4.6 Terminal States (What Happens When Loops Exhaust)
+
+When retries are exhausted, we need to fail gracefully. The user should understand *why* and *what they can do*.
+
+| Terminal State | User-Facing Message | Next Action |
+|---|---|---|
+| `success` | Results + explanation | Done |
+| `clarification_needed` | "I need more info: [question]" | Wait for user response |
+| `syntax_error_unresolved` | "I couldn't generate valid SQL for this question after multiple attempts. Try rephrasing?" | Show last SQL + error for transparency |
+| `execution_error_unresolved` | "The query runs but the database returned errors I couldn't fix. Here's what I tried:" | Show attempt history |
+| `security_violation` | "I can't run this query — it would modify the database." | Hard stop, no retry |
+| `unrecoverable_error` | "Database error: [timeout/connection]. This isn't a query problem." | Suggest trying later or simplifying |
+
+**Why show attempt history on failure?**
+- Transparency builds trust. If the user sees we tried 4 times with specific errors, they understand it's a hard problem, not a lazy system.
+- A technical user might read the errors and rephrase their question more precisely.
+- This is way better than a generic "Something went wrong" message.
+
+#### 7.4.7 AgentState Updates Required
+
+The current `AgentState` in [state.py](file:///c:/UNIVERSE/Projects/SQLPilot/app/agents/state.py) needs these additions:
+
+```python
+# replace single retry_count with per-loop counters
+validation_retry_count: int         # how many syntax fix attempts (max 2)
+execution_retry_count: int          # how many runtime fix attempts (max 2)
+
+# error history — the key to effective correction
+correction_history: list[dict]      # append-only log of all failed attempts
+
+# keep these existing fields, they track the CURRENT error
+# syntax_error, execution_error, is_valid_syntax, is_safe, safety_error
+```
+
+Fields to **remove**: `retry_count` (replaced by the two specific counters above)
+
 ---
 
 ## 8. RAG Pipeline Design
@@ -542,3 +769,4 @@ These will live as markdown files in `knowledge_base/`:
 | 9 | Observability (Q9) | **Langfuse Cloud free tier** | Hosted, no extra infra to manage. 50K observations/month is plenty for a demo/prototype. Just needs API key in `.env`. | 2026-09-07 |
 | 10 | Demo Schema (Q10) | **Full SaaS schema (7 tables)** | customers, subscriptions, invoices, support_tickets, products, usage_events, employees. Rich enough to demo ambiguity (name appears in both customers and employees, revenue can mean multiple things). | 2026-09-07 |
 | 11 | Deployment Split (Q11) | **Streamlit Community Cloud + Render** | Frontend (Streamlit) on Streamlit Community Cloud (free). Backend (FastAPI) on Render free tier. Separation of concerns, both free. | 2026-09-07 |
+| 12 | Self-Correction Loop Design | **Separate loops (2+2 retries), error classification, append-only history** | Three independent loops (syntax fix, runtime fix, clarification) with separate retry budgets of 2 each. Errors classified as recoverable vs unrecoverable to avoid wasting retries. Full error history accumulated and fed back to LLM on each correction attempt — prevents oscillation. Corrections always re-routed through validation (not directly to execution). Total worst-case: 5 LLM calls per question. | 2026-09-07 |
