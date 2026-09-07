@@ -38,11 +38,17 @@ class AgentState(TypedDict, total=False):
     is_safe: bool                         # did it pass the security blocklist?
     safety_error: str                     # security violation message (if any)
 
+    # --- self-correction (see DESIGN.md §7.4) ---
+    validation_retry_count: int           # syntax fix attempts (max 2)
+    execution_retry_count: int            # runtime fix attempts (max 2)
+    correction_history: list[dict]        # append-only log of all failed attempts
+    # each entry: {"attempt": int, "sql": str, "error_type": str,
+    #              "error_message": str, "stage": str}
+
     # --- execution ---
     query_results: list[dict]             # rows returned from the database
     query_columns: list[str]              # column names from the result set
     execution_error: str                  # DB runtime error (if any)
-    retry_count: int                      # how many times we've retried
 
     # --- output ---
     explanation: str                      # plain-English explanation of results

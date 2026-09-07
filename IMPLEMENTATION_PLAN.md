@@ -13,7 +13,7 @@
 | Phase | Name | Goal | Status |
 |---|---|---|---|
 | 0 | **Foundation** | Project structure, configs, dev environment | ✅ Done |
-| 1 | **Core Pipeline** | Question → SQL → Result (no clarification, no RAG) | 🔲 Not Started |
+| 1 | **Core Pipeline** | Question → SQL → Result (no clarification, no RAG) | ✅ Done |
 | 2 | **RAG Layer** | Schema & knowledge base retrieval | 🔲 Not Started |
 | 3 | **Clarification Engine** | Ambiguity detection + follow-up questions | 🔲 Not Started |
 | 4 | **Self-Correction & Validation** | SQLGlot validation + retry loops | 🔲 Not Started |
@@ -52,26 +52,26 @@
 **Goal**: Take a natural language question, generate SQL, execute it, return results. No RAG, no clarification, no validation — just the happy path.
 
 ### Tasks
-- [ ] Implement provider-agnostic LLM client (`app/llm/base.py`)
+- [x] Implement provider-agnostic LLM client (`app/llm/base.py`)
   - Abstract interface: `generate(prompt, system_prompt) -> str`
-  - Gemini Flash implementation (`app/llm/gemini.py`)
-  - Structured output (JSON with SQL + assumptions)
-- [ ] Implement basic SQL generation prompt
-  - System prompt with schema (hardcoded for now — RAG comes in Phase 2)
+  - Gemini Flash implementation (`app/llm/gemini.py`) — using gemini-3.6-flash
+  - Structured output (JSON with SQL + assumptions via `response_mime_type`)
+- [x] Implement basic SQL generation prompt
+  - System prompt with schema (hardcoded via DB introspection — RAG comes in Phase 2)
   - User question → SQL output
-- [ ] Implement SQLite database execution
+- [x] Implement SQLite database execution
   - Connect to demo `data/demo.db`
   - Execute generated SQL
   - Return results as JSON/table
-- [ ] Implement result explanation
+- [x] Implement result explanation
   - LLM explains what the query returned in plain English
-- [ ] Wire it all together as a basic LangGraph graph (linear, no cycles yet)
+- [x] Wire it all together as a basic LangGraph graph (linear, no cycles yet)
   - Nodes: generate → execute → explain
-- [ ] Basic CLI for testing (`python -m app.cli "What are the top 5 customers?"`)
+- [x] Basic CLI for testing (`python -m app.cli "What are the top 5 customers?"`)
 
 ### Deliverables
-- End-to-end: question → SQL → result → explanation
-- Works against demo database
+- [x] End-to-end: question → SQL → result → explanation
+- [x] Works against demo database (tested with COUNT, multi-table JOIN, GROUP BY)
 - No error handling yet (that's Phase 4)
 
 ---
