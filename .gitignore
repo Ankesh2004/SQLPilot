@@ -1,0 +1,32 @@
+# environment
+.env
+.venv/
+venv/
+env/
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# data (generated, not tracked)
+data/demo.db
+data/chroma/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# testing
+.pytest_cache/
+htmlcov/
+.coverage

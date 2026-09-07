@@ -12,7 +12,7 @@
 
 | Phase | Name | Goal | Status |
 |---|---|---|---|
-| 0 | **Foundation** | Project structure, configs, dev environment | 🔲 Not Started |
+| 0 | **Foundation** | Project structure, configs, dev environment | ✅ Done |
 | 1 | **Core Pipeline** | Question → SQL → Result (no clarification, no RAG) | 🔲 Not Started |
 | 2 | **RAG Layer** | Schema & knowledge base retrieval | 🔲 Not Started |
 | 3 | **Clarification Engine** | Ambiguity detection + follow-up questions | 🔲 Not Started |
@@ -31,70 +31,19 @@
 **Goal**: Get the project skeleton in place so we can iterate fast.
 
 ### Tasks
-- [ ] Finalize all open decisions in DESIGN.md (sections Q1–Q7)
-- [ ] Set up project structure:
-  ```
-  SQLPilot/
-  ├── app/
-  │   ├── main.py              # FastAPI entrypoint
-  │   ├── config.py            # Settings (LLM keys, DB URLs, etc.)
-  │   ├── models/              # Pydantic schemas
-  │   ├── agents/              # LangGraph state machine + nodes
-  │   │   ├── graph.py         # the main graph definition
-  │   │   ├── state.py         # AgentState TypedDict
-  │   │   └── nodes/           # one file per node
-  │   ├── llm/                 # Provider-agnostic LLM client
-  │   │   ├── base.py          # abstract interface
-  │   │   ├── gemini.py        # Gemini Flash implementation
-  │   │   └── groq.py          # Groq/Llama implementation (future)
-  │   ├── rag/                 # RAG pipeline (ChromaDB + sentence-transformers)
-  │   │   ├── indexer.py       # schema introspection + embedding
-  │   │   ├── retriever.py     # similarity search
-  │   │   └── store.py         # ChromaDB wrapper
-  │   ├── validation/          # SQLGlot validation + security
-  │   │   ├── syntax.py        # AST parsing
-  │   │   └── security.py      # blocklist traversal
-  │   └── db/                  # Database connection + sandbox
-  │       ├── connection.py    # connection pool
-  │       └── sandbox.py       # read-only execution
-  ├── streamlit_app.py         # Streamlit chat frontend
-  ├── scripts/
-  │   ├── seed_database.py     # populate demo SQLite DB
-  │   └── index_rag.py         # index schema into ChromaDB
-  ├── knowledge_base/          # markdown business rules
-  │   ├── mrr.md
-  │   ├── churn.md
-  │   ├── revenue.md
-  │   └── active_users.md
-  ├── tests/
-  │   ├── test_pipeline.py
-  │   ├── test_validation.py
-  │   ├── test_clarification.py
-  │   └── eval/                # benchmark evaluation scripts
-  │       ├── eval_dataset.json
-  │       └── run_eval.py
-  ├── data/
-  │   └── demo.db              # pre-seeded SQLite demo database
-  ├── docker-compose.yml
-  ├── pyproject.toml
-  ├── requirements.txt
-  ├── .env.example
-  ├── DESIGN.md
-  ├── IMPLEMENTATION_PLAN.md
-  ├── CLAUDE.md
-  └── README.md
-  ```
-- [ ] Set up Python environment (pyproject.toml + requirements.txt)
-- [ ] Set up .env.example with all required config keys (GEMINI_API_KEY, LANGFUSE_*, DB_URL)
-- [ ] Create demo SQLite database with the SaaS schema (7 tables)
-- [ ] Seed demo database with realistic sample data (~100-500 rows per table)
-- [ ] Write business rules markdown files in `knowledge_base/`
+- [x] Finalize all open decisions in DESIGN.md (sections Q1–Q7)
+- [x] Set up project structure (see tree above)
+- [x] Set up Python environment (pyproject.toml + requirements.txt)
+- [x] Set up .env.example with all required config keys (GEMINI_API_KEY, LANGFUSE_*, DB_URL)
+- [x] Create demo SQLite database with the SaaS schema (7 tables)
+- [x] Seed demo database with realistic sample data (53 customers, 69 subs, 413 invoices, 75 tickets, 5 products, 1356 usage events, 15 employees)
+- [x] Write business rules markdown files in `knowledge_base/` (mrr, churn, revenue, active_users, clv, resolution_time)
 
 ### Deliverables
-- Working dev environment
-- Demo SQLite database with SaaS data ready
-- Business rules knowledge base written
-- CI-ready project structure
+- [x] Working dev environment
+- [x] Demo SQLite database with SaaS data at `data/demo.db`
+- [x] Business rules knowledge base (6 files)
+- [x] CI-ready project structure
 
 ---
 

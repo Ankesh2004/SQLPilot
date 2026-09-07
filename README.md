@@ -1,4 +1,4 @@
-# 🚀 Production-Grade Text-to-SQL Agent
+# Text-to-SQL Agent
 
 A robust, self-correcting, and production-ready Text-to-SQL engine built with **LangGraph**, **RAG (Qdrant)**, **FastAPI**, and **Langfuse**. 
 
