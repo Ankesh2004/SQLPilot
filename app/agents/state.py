@@ -34,8 +34,9 @@ class AgentState(TypedDict, total=False):
     sql_dialect: str                      # "sqlite" or "postgres"
 
     # --- validation ---
-    is_valid_syntax: bool                 # did SQLGlot parse it successfully?
-    syntax_error: str                     # parse error message (if any)
+    validation_passed: bool                # did the SQL pass all validation checks?
+    validation_error: str                  # validation error message (if any)
+    validation_error_type: str             # "syntax", "security", "empty"
     is_safe: bool                         # did it pass the security blocklist?
     safety_error: str                     # security violation message (if any)
 

@@ -16,7 +16,7 @@
 | 1 | **Core Pipeline** | Question → SQL → Result (no clarification, no RAG) | ✅ Done |
 | 2 | **RAG Layer** | Schema & knowledge base retrieval | ✅ Done |
 | 3 | **Clarification Engine** | Ambiguity detection + follow-up questions | ✅ Done |
-| 4 | **Self-Correction & Validation** | SQLGlot validation + retry loops | 🔲 Not Started |
+| 4 | **Self-Correction & Validation** | SQLGlot validation + retry loops | ✅ Done |
 | 5 | **Self-Consistency** *(post-MVP)* | Multi-candidate generation + voting | 🔲 Not Started |
 | 6 | **Security & Sandbox** | Read-only execution, blocklist, timeouts | 🔲 Not Started |
 | 7 | **Observability** | Langfuse tracing, cost tracking | 🔲 Not Started |
@@ -146,28 +146,33 @@
 **Goal**: Catch and fix SQL errors before (and after) hitting the database.
 
 ### Tasks
-- [ ] Implement SQLGlot validation
-  - Parse generated SQL into AST
-  - Catch syntax errors
-  - Validate against target dialect
-- [ ] Implement error feedback loop
-  - On parse error → feed error message + original SQL back to LLM
-  - LLM regenerates with error context
-  - Max 3 validation retries
-- [ ] Implement runtime error handling
-  - Catch database execution errors (missing column, bad join, etc.)
-  - Feed DB error back to LLM for correction
-  - Max 3 execution retries
-- [ ] Implement security blocklist
-  - Traverse AST for DML/DDL nodes
-  - Block any query with mutation commands
-  - Return user-friendly error message
+- [x] Implement SQLGlot validation (`app/validation/validator.py`)
+  - Three-layer check: keyword blocklist -> syntax parse -> AST mutation scan
+  - Dialect-aware parsing (sqlite, postgres, mysql)
+  - ValidationResult with error_type, is_recoverable classification
+- [x] Implement error feedback loop (`app/agents/nodes/correct_sql.py`)
+  - Correction prompts with full error history + schema context (per DESIGN.md §7.4.4)
+  - `what_i_changed` field forces LLM to articulate its fix
+  - Max 2 validation retries (per DESIGN.md §7.4.1)
+- [x] Implement runtime error handling
+  - execute_query records errors in correction_history with error classification
+  - Recoverable: no such column/table, syntax error, ambiguous column
+  - Unrecoverable: permission denied, timeout, connection error
+  - Max 2 execution retries
+- [x] Implement security blocklist
+  - Keyword-level: DROP, DELETE, INSERT, UPDATE, ALTER, CREATE, TRUNCATE, etc.
+  - AST-level: walks parse tree for mutation node types (defense in depth)
+  - Blocked queries marked unrecoverable -- no retry attempts wasted
+  - Tested: "DROP TABLE customers" -> immediate block with clear error
+- [x] Updated graph with conditional edges for both correction loops
+  - Corrections always re-routed through validate_sql (never skip to execution)
+  - explain_with_error terminal node for unrecoverable errors
 
 ### Deliverables
-- SQL syntax errors caught before DB execution
-- Automatic self-correction on validation failures
-- Runtime errors trigger retry loop
-- No mutation queries can reach the database
+- [x] SQL syntax errors caught before DB execution
+- [x] Automatic self-correction on validation failures (Loop 1)
+- [x] Runtime errors trigger retry loop (Loop 2)
+- [x] No mutation queries can reach the database (tested: DROP TABLE blocked)
 
 ---
 
