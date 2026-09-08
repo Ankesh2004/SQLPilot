@@ -21,7 +21,8 @@ def generate_sql(state: AgentState) -> dict:
     reads: user_question, schema_context, business_rules_context
     writes: generated_sql, llm_assumptions, sql_dialect
     """
-    question = state["user_question"]
+    # use the enriched question if clarification happened, otherwise the original
+    question = state.get("clarified_question") or state["user_question"]
     dialect = state.get("sql_dialect", "sqlite")
 
     # schema should come from retrieve_context node (Phase 2+)

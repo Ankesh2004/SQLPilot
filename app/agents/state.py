@@ -25,6 +25,7 @@ class AgentState(TypedDict, total=False):
     ambiguity_type: str                   # what kind of ambiguity
     clarification_question: str           # the follow-up question to ask the user
     clarification_options: list[str]      # multiple-choice options (if any)
+    clarification_response: str           # user's answer to the clarification question
     clarification_round: int             # which round of clarification we're on (max 2)
 
     # --- SQL generation ---

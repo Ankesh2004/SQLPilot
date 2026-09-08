@@ -15,7 +15,7 @@
 | 0 | **Foundation** | Project structure, configs, dev environment | ✅ Done |
 | 1 | **Core Pipeline** | Question → SQL → Result (no clarification, no RAG) | ✅ Done |
 | 2 | **RAG Layer** | Schema & knowledge base retrieval | ✅ Done |
-| 3 | **Clarification Engine** | Ambiguity detection + follow-up questions | 🔲 Not Started |
+| 3 | **Clarification Engine** | Ambiguity detection + follow-up questions | ✅ Done |
 | 4 | **Self-Correction & Validation** | SQLGlot validation + retry loops | 🔲 Not Started |
 | 5 | **Self-Consistency** *(post-MVP)* | Multi-candidate generation + voting | 🔲 Not Started |
 | 6 | **Security & Sandbox** | Read-only execution, blocklist, timeouts | 🔲 Not Started |
@@ -112,28 +112,32 @@
 **Goal**: Detect ambiguous questions and ask the user for clarification before generating SQL.
 
 ### Tasks
-- [ ] Implement ambiguity detection (Approach A — LLM introspection)
-  - Prompt template that asks "is this clear enough to write SQL?"
-  - Structured output: `{ is_ambiguous, ambiguity_type, clarification_question, options[] }`
-- [ ] Implement clarification state management
-  - Track conversation history in LangGraph's AgentState
-  - Append clarification Q&A to context for next iteration
-  - Limit to 2 clarification rounds max
-- [ ] Implement clarification UX
-  - Multiple-choice options when possible
-  - Open-ended fallback
-- [ ] Integrate into LangGraph state machine
-  - Add `check_ambiguity` node after RAG retrieval
-  - Use LangGraph's `interrupt()` for human-in-the-loop pause
-  - On user response → resume pipeline with enriched context
-- [ ] (Optional) Implement Approach B — self-consistency disagreement detection
-  - Generate N candidates, compare for disagreement
-  - Use disagreement points to generate clarification questions
+- [x] Implement ambiguity detection (Approach A -- LLM introspection)
+  - Prompt template: `prompts_clarification.py` with 5 ambiguity types
+  - Structured output: `{ is_ambiguous, ambiguity_type, confidence, clarification_question, options[], reasoning }`
+  - Low-confidence filter (< 0.6) to reduce false positives
+- [x] Implement clarification state management (`handle_clarification.py`)
+  - Tracks conversation history in AgentState.clarification_history
+  - Builds enriched question combining original + clarification response
+  - Limit to 2 clarification rounds max, then proceed with best guess
+- [x] Implement clarification UX (CLI)
+  - Multiple-choice options with number selection
+  - Open-ended fallback for free text
+  - Skip support (empty input = proceed with best guess)
+- [x] Integrate into LangGraph state machine
+  - `check_ambiguity` node after RAG retrieval, before generation
+  - Graph terminates at `stop_for_clarification` -> caller manages the loop
+  - On user response -> handle_clarification -> re-invoke graph
+  - Decided against LangGraph interrupt() -- caller-managed loop is simpler
+- [x] Added rate limit retry with exponential backoff to Gemini client
+- [ ] (Optional) Implement Approach B -- self-consistency disagreement detection
+  - Deferred to Phase 5 (self-consistency)
 
 ### Deliverables
-- System detects ambiguous questions and asks for clarification
-- Multi-round clarification dialogue works
-- Pipeline pauses/resumes correctly
+- [x] System detects ambiguous questions (tested: "Show me revenue" -> metric ambiguity with 4 options)
+- [x] Multi-round clarification dialogue works (2 rounds max)
+- [x] Pipeline pauses/resumes correctly (graph stops at END, caller re-invokes)
+- [x] Clear questions pass through without unnecessary clarification
 
 ---
 

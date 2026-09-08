@@ -13,5 +13,8 @@ def get_llm_client() -> BaseLLMClient:
     if settings.llm_provider == "gemini":
         from app.llm.gemini import GeminiClient
         return GeminiClient()
+    elif settings.llm_provider == "groq":
+        from app.llm.groq_client import GroqClient
+        return GroqClient()
     else:
         raise ValueError(f"Unknown LLM provider: {settings.llm_provider}")
