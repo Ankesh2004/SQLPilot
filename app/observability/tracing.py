@@ -53,11 +53,8 @@ def start_trace(name: str, session_id: str | None = None, input=None):
     start a new trace for one user question. returns a contextvar token to
     pass to end_trace, or None if tracing is disabled.
     """
-    client = get_client()
-    if client is None:
-        return None
-    trace = client.trace(name=name, session_id=session_id, input=input)
-    return _current_trace.set(trace)
+    trace = new_trace(name, session_id=session_id, input=input)
+    return use_trace(trace)
 
 
 def end_trace(token, output=None, metadata=None):
@@ -65,9 +62,46 @@ def end_trace(token, output=None, metadata=None):
     if token is None:
         return
     trace = _current_trace.get()
-    if trace is not None:
-        trace.update(output=output, metadata=metadata)
+    finalize_trace(trace, output=output, metadata=metadata)
     _current_trace.reset(token)
+
+
+def new_trace(name: str, session_id: str | None = None, input=None):
+    """
+    create a trace object directly, without touching the active-trace
+    contextvar. for callers that manage the trace across multiple separate
+    calls themselves (e.g. the HTTP API's /query -> /clarify flow, where
+    each request is its own call stack and can't share a contextvar token).
+    returns None if tracing is disabled.
+    """
+    client = get_client()
+    if client is None:
+        return None
+    return client.trace(name=name, session_id=session_id, input=input)
+
+
+def use_trace(trace):
+    """
+    activate an existing trace object (from new_trace) for the current call
+    stack, so traced_node/log_generation/score_trace attach to it. returns a
+    contextvar token to pass to deactivate_trace, or None if trace is None.
+    """
+    if trace is None:
+        return None
+    return _current_trace.set(trace)
+
+
+def deactivate_trace(token) -> None:
+    """undo use_trace -- call in a `finally` after the traced work is done."""
+    if token is not None:
+        _current_trace.reset(token)
+
+
+def finalize_trace(trace, output=None, metadata=None) -> None:
+    """close out a trace object and flush queued events to Langfuse."""
+    if trace is None:
+        return
+    trace.update(output=output, metadata=metadata)
     client = get_client()
     if client is not None:
         client.flush()

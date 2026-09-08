@@ -28,5 +28,5 @@ asyncpg>=0.30.0
 python-dotenv>=1.0.0
 httpx>=0.27.0
 
-# frontend (install separately if needed)
-# streamlit>=1.40.0
+# frontend
+streamlit>=1.40.0

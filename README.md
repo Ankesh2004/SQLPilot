@@ -98,23 +98,34 @@ To move from a prototype to a production system, you must be able to see *how* t
 ## 🚀 Getting Started
 
 ### Prerequisites
-* Docker & Docker Compose
 * Python 3.11+
-* Access to an LLM provider (e.g., Groq for free Llama 3, or Anthropic/OpenAI)
+* Access to an LLM provider (Gemini or Groq — see `.env.example`)
+* A [Langfuse Cloud](https://cloud.langfuse.com) account (free tier) if you want tracing -- optional, the pipeline runs fine without it
 
-### 1. Spin up Infrastructure
+### 1. Install & configure
 ```bash
-# Starts PostgreSQL (App DB), Qdrant (Vector DB), and Langfuse (Observability)
-docker-compose up -d
+pip install -r requirements.txt
+cp .env.example .env   # fill in your LLM + (optional) Langfuse keys
 ```
 
-### 2. Index the Environment
+### 2. Seed the demo database and index RAG
 ```bash
 python scripts/seed_database.py
 python scripts/index_rag.py
 ```
 
-### 3. Run the API Gateway
+### 3. Run the API
 ```bash
 uvicorn app.main:app --reload --port 8000
+# Swagger docs at http://localhost:8000/docs
+```
+
+### 4. Run the frontend
+```bash
+streamlit run streamlit_app.py
+```
+
+### Or skip the API/UI entirely and use the CLI
+```bash
+python -m app.cli "What are the top 5 customers by revenue?"
 ```

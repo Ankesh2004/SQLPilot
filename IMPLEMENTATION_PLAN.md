@@ -20,7 +20,7 @@
 | 5 | **Self-Consistency** *(post-MVP)* | Multi-candidate generation + voting | 🔲 Not Started |
 | 6 | **Security & Sandbox** | Read-only execution, blocklist, timeouts | ✅ Done |
 | 7 | **Observability** | Langfuse tracing, cost tracking | ✅ Done |
-| 8 | **API & Interface** | FastAPI endpoints + UI (Gradio/frontend) | 🔲 Not Started |
+| 8 | **API & Interface** | FastAPI endpoints + UI (Gradio/frontend) | ✅ Done |
 | 9 | **Evaluation & Benchmarks** | Internal eval set + benchmark runs | 🔲 Not Started |
 | 10 | **Deployment** | Free-tier deployment + Docker Compose | 🔲 Not Started |
 
@@ -271,27 +271,45 @@
 **Goal**: Expose the pipeline via HTTP API and build a user-facing interface.
 
 ### Tasks
-- [ ] FastAPI endpoints
-  - `POST /query` — submit a question, get SQL + results
-  - `POST /clarify` — respond to a clarification question
-  - `GET /schema` — view indexed schema
+- [x] FastAPI endpoints (`app/api/routes.py`)
+  - `POST /query` — submit a question, get SQL + results, or `clarification_needed`
+  - `POST /clarify` — respond to a clarification question (looks up the pending
+    state + Langfuse trace by `session_id` in `app/api/session_store.py`, an
+    in-memory store bridging the two-request flow -- same tradeoff as the
+    rate limiter, fine for a single-process demo, not multi-worker production)
+  - `GET /schema` — introspected schema (tables, columns, row counts)
   - `GET /health` — health check
-  - WebSocket endpoint for streaming (optional)
-- [ ] Pydantic request/response models
-- [ ] Error handling and HTTP status codes
-- [ ] CORS configuration
-- [ ] Build Streamlit chat frontend (`streamlit_app.py`)
+  - WebSocket streaming — skipped (optional per plan)
+- [x] Pydantic request/response models (`app/models/schemas.py`)
+- [x] Error handling and HTTP status codes -- 422 on invalid input (empty
+  question), 404 on an unknown/expired clarification session_id, 500 on
+  unexpected pipeline errors (translated from exceptions, e.g. missing DB
+  file); business-logic failures (blocked SQL, execution errors) return 200
+  with `status: "error"` and a message, same as the CLI
+- [x] CORS configuration (permissive `allow_origins=["*"]` -- local/demo API,
+  no auth)
+- [x] Build Streamlit chat frontend (`streamlit_app.py`) -- talks to the
+  FastAPI backend over HTTP (`SQLPILOT_API_URL`, default `localhost:8000`)
   - Chat interface using `st.chat_message` and `st.chat_input`
-  - Handle clarification dialogue (show options as buttons)
-  - Display SQL, results table, and natural language explanation
-  - Show "thinking" spinner during LLM calls
-  - Session state management for multi-turn conversations
-- [ ] API documentation (auto-generated via FastAPI + manual examples)
+  - Clarification dialogue shown as buttons (with a free-text fallback)
+  - Displays SQL, results table, assumptions, and explanation; errors via `st.error`
+  - "Thinking..." spinner during each API call
+  - Session state management for multi-turn conversations, plus a
+    "New conversation" reset in the sidebar
+- [x] API documentation -- FastAPI auto-generates OpenAPI docs at `/docs` and
+  `/redoc` from the Pydantic models and endpoint docstrings; request models
+  carry a `json_schema_extra` example
 
 ### Deliverables
-- Working HTTP API
-- Interactive UI for asking questions and handling clarification
-- API docs
+- [x] Working HTTP API (verified live: `/health`, `/schema`, a clear `/query`,
+  the `/query` -> `/clarify` two-round ambiguous flow, the security-blocklist
+  error path, and both error statuses -- all against the running Groq-backed
+  pipeline, not mocked)
+- [x] Interactive UI for asking questions and handling clarification (driven
+  in an actual browser via Chrome automation: typed a question, got SQL +
+  table + explanation; asked an ambiguous question, clicked a clarification
+  button, got the follow-up answer -- no console errors)
+- [x] API docs (Swagger UI at `/docs`)
 
 ---
 
