@@ -3,10 +3,16 @@ SQLite database connector for the demo database.
 
 handles connecting, executing read-only queries, and returning results
 as structured data the rest of the pipeline can use.
+
+security hardening (Phase 6):
+  - read-only connection via query_only pragma
+  - statement timeout via interrupt after N seconds
+  - row limit via fetchmany (configurable in settings)
 """
 
 import sqlite3
 import logging
+import threading
 from pathlib import Path
 
 from app.config import settings
@@ -27,23 +33,35 @@ class SQLiteConnector:
 
     def execute_query(self, sql: str) -> dict:
         """
-        execute a SQL query and return results.
+        execute a SQL query in a read-only, time-limited sandbox.
 
         returns a dict with:
             - columns: list of column names
             - rows: list of dicts (one per row)
             - row_count: how many rows came back
 
-        raises RuntimeError if the query fails (so the correction loop
-        can catch it and feed the error back to the LLM).
+        raises RuntimeError if the query fails, times out, or is blocked.
         """
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row  # so we get column names
-        cursor = conn.cursor()
+        timeout_s = settings.statement_timeout_ms / 1000.0
+
+        conn = sqlite3.connect(self.db_path, timeout=5)
+        conn.row_factory = sqlite3.Row
 
         try:
-            cursor.execute(sql)
-            rows_raw = cursor.fetchmany(settings.max_result_rows)
+            # enforce read-only mode at the SQLite level
+            # this prevents any writes even if our blocklist somehow misses something
+            conn.execute("PRAGMA query_only = ON")
+
+            # set up a timer to interrupt long-running queries
+            timer = threading.Timer(timeout_s, conn.interrupt)
+            timer.start()
+
+            try:
+                cursor = conn.cursor()
+                cursor.execute(sql)
+                rows_raw = cursor.fetchmany(settings.max_result_rows)
+            finally:
+                timer.cancel()
 
             if not rows_raw:
                 return {"columns": [], "rows": [], "row_count": 0}
@@ -57,10 +75,25 @@ class SQLiteConnector:
                 "row_count": len(rows),
             }
 
-        except sqlite3.Error as e:
-            # wrap in RuntimeError so the pipeline can distinguish
-            # DB errors from other exceptions
+        except sqlite3.OperationalError as e:
+            error_msg = str(e)
+            # sqlite3.interrupt() raises "interrupted" — translate to timeout
+            if "interrupted" in error_msg.lower():
+                raise RuntimeError(
+                    f"Query timed out after {timeout_s}s. "
+                    "Try simplifying the query or adding filters to reduce the result set."
+                ) from e
+            # read-only violation
+            if "readonly" in error_msg.lower() or "query_only" in error_msg.lower():
+                raise RuntimeError(
+                    "Query was blocked: only SELECT queries are allowed. "
+                    "The database is in read-only mode."
+                ) from e
             raise RuntimeError(f"SQLite error: {e}") from e
+
+        except sqlite3.Error as e:
+            raise RuntimeError(f"SQLite error: {e}") from e
+
         finally:
             conn.close()
 
@@ -68,12 +101,11 @@ class SQLiteConnector:
         """
         introspect the database and return a human-readable schema string.
 
-        used in Phase 1 as a hardcoded schema context (before RAG is wired up).
+        used as fallback schema context when RAG isn't available.
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        # get all CREATE TABLE statements — sqlite stores them in sqlite_master
         cursor.execute(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         )

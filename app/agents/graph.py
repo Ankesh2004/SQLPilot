@@ -1,8 +1,8 @@
 """
 LangGraph graph definition.
 
-Phase 4 adds validation and self-correction loops:
-  retrieve → ambiguity check → generate → validate → [fix loop] → execute → [fix loop] → explain
+Phase 6 adds security hardening:
+  rate_limit_guard → retrieve → ambiguity check → generate → validate → [fix loop] → execute → [fix loop] → explain
 
 Two independent correction loops per DESIGN.md §7.4:
   - Loop 1 (syntax): validate_sql fails → correct_sql → re-validate (max 2 retries)
@@ -19,6 +19,7 @@ from app.agents.nodes.validate_sql import validate_sql_node
 from app.agents.nodes.correct_sql import correct_sql
 from app.agents.nodes.execute_query import execute_query
 from app.agents.nodes.explain_results import explain_results
+from app.security.rate_limiter import rate_limiter
 
 
 # --- routing functions ---
@@ -87,6 +88,25 @@ def _route_after_correction(state: AgentState) -> str:
     return "validate_sql"
 
 
+def _rate_limit_guard(state: AgentState) -> dict:
+    """check rate limit before processing. fast reject if over budget."""
+    session_id = state.get("session_id", "default")
+    if not rate_limiter.check(session_id):
+        return {
+            "explanation": "Rate limit exceeded. Please wait a moment before submitting another query.",
+            "final_status": "error",
+            "rate_limited": True,
+        }
+    return {"rate_limited": False}
+
+
+def _route_after_rate_limit(state: AgentState) -> str:
+    """skip everything if rate limited."""
+    if state.get("rate_limited"):
+        return "explain_with_error"
+    return "retrieve_context"
+
+
 def _stop_for_clarification(state: AgentState) -> dict:
     """signal that we need user input and stop the graph."""
     return {"final_status": "clarification_needed"}
@@ -98,6 +118,11 @@ def _explain_with_error(state: AgentState) -> dict:
 
     instead of crashing, we report what went wrong in a user-friendly way.
     """
+    # if we already have an explanation (e.g. from rate limiter), keep it
+    existing = state.get("explanation", "")
+    if existing:
+        return {"final_status": "error"}
+
     validation_error = state.get("validation_error", "")
     execution_error = state.get("execution_error", "")
     error = validation_error or execution_error or "Unknown error"
@@ -126,6 +151,7 @@ def build_graph() -> StateGraph:
     graph = StateGraph(AgentState)
 
     # add all nodes
+    graph.add_node("rate_limit_guard", _rate_limit_guard)
     graph.add_node("retrieve_context", retrieve_context)
     graph.add_node("check_ambiguity", check_ambiguity)
     graph.add_node("stop_for_clarification", _stop_for_clarification)
@@ -136,8 +162,17 @@ def build_graph() -> StateGraph:
     graph.add_node("explain_results", explain_results)
     graph.add_node("explain_with_error", _explain_with_error)
 
-    # entry
-    graph.set_entry_point("retrieve_context")
+    # entry: rate limit check first
+    graph.set_entry_point("rate_limit_guard")
+
+    graph.add_conditional_edges(
+        "rate_limit_guard",
+        _route_after_rate_limit,
+        {
+            "retrieve_context": "retrieve_context",
+            "explain_with_error": "explain_with_error",
+        },
+    )
 
     # retrieve → ambiguity check
     graph.add_edge("retrieve_context", "check_ambiguity")

@@ -18,7 +18,7 @@
 | 3 | **Clarification Engine** | Ambiguity detection + follow-up questions | ✅ Done |
 | 4 | **Self-Correction & Validation** | SQLGlot validation + retry loops | ✅ Done |
 | 5 | **Self-Consistency** *(post-MVP)* | Multi-candidate generation + voting | 🔲 Not Started |
-| 6 | **Security & Sandbox** | Read-only execution, blocklist, timeouts | 🔲 Not Started |
+| 6 | **Security & Sandbox** | Read-only execution, blocklist, timeouts | ✅ Done |
 | 7 | **Observability** | Langfuse tracing, cost tracking | 🔲 Not Started |
 | 8 | **API & Interface** | FastAPI endpoints + UI (Gradio/frontend) | 🔲 Not Started |
 | 9 | **Evaluation & Benchmarks** | Internal eval set + benchmark runs | 🔲 Not Started |
@@ -208,23 +208,26 @@
 **Goal**: Harden the execution environment for production use.
 
 ### Tasks
-- [ ] Create read-only PostgreSQL role
-  - `CREATE ROLE sqlpilot_readonly LOGIN PASSWORD '...'`
-  - `GRANT USAGE ON SCHEMA public TO sqlpilot_readonly`
-  - `GRANT SELECT ON ALL TABLES IN SCHEMA public TO sqlpilot_readonly`
-- [ ] Configure connection pool with safety limits
-  - `statement_timeout = 30000` (30 seconds)
-  - `max_rows = 1000` (application-level limit)
-  - Connection pool size limits
-- [ ] Implement query complexity analysis (optional)
-  - Estimate query cost before execution
-  - Reject queries that would scan too many rows
-- [ ] Rate limiting per user/session
+- [x] Enforce read-only execution at database level
+  - `PRAGMA query_only = ON` on every connection (SQLite equivalent of read-only role)
+  - Writes raise RuntimeError with clear message
+  - PostgreSQL roles deferred until Postgres is actually needed
+- [x] Statement timeout via `threading.Timer` + `conn.interrupt()`
+  - Configurable via `STATEMENT_TIMEOUT_MS` (default 30s)
+  - Translates "interrupted" to user-friendly timeout message suggesting query simplification
+- [x] Row limit already in place (`fetchmany(max_result_rows)`, default 1000)
+- [x] Rate limiting per session (`app/security/rate_limiter.py`)
+  - Sliding window counter (in-memory, per-minute)
+  - Configurable via `RATE_LIMIT_PER_MINUTE` (default 20)
+  - Wired as entry guard node in graph -- rejects before any LLM calls
+- [ ] Query complexity analysis (optional, deferred)
+  - EXPLAIN QUERY PLAN analysis deferred -- overkill for SQLite demo
 
 ### Deliverables
-- Database access is read-only by design
-- Queries can't run forever or return unlimited data
-- Dangerous operations are blocked at AST level AND DB level (defense in depth)
+- [x] Database access is read-only by design (tested: DELETE blocked at DB level)
+- [x] Queries can't run forever (30s timeout) or return unlimited data (1000 row cap)
+- [x] Dangerous operations blocked at three levels: keyword blocklist (Phase 4) + AST walk (Phase 4) + DB-level read-only (Phase 6)
+- [x] Rate limiting prevents runaway loops or abuse
 
 ---
 

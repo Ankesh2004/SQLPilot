@@ -13,6 +13,8 @@ class AgentState(TypedDict, total=False):
 
     # --- user input ---
     user_question: str                    # the original natural language question
+    session_id: str                       # for rate limiting (default: "default")
+    rate_limited: bool                    # was this request rate limited?
     clarification_history: list[dict]     # previous clarification Q&A rounds
     clarified_question: str               # question after clarification enrichment
 

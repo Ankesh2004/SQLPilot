@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     max_retries: int = 3
     statement_timeout_ms: int = 30000
     max_result_rows: int = 1000
+    rate_limit_per_minute: int = 20  # max queries per session per minute
     log_level: str = "INFO"
 
     model_config = {
