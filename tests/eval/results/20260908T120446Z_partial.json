@@ -1,0 +1,222 @@
+{
+  "run_note": "PARTIAL RUN: the eval script crashed on case C3 (19th of 50) when Groq's free-tier daily token cap (200,000 TPD) was exhausted mid-run (199,802/200,000 used per the provider error). Per user decision, this partial run was documented as-is rather than burning more of the daily quota; the remaining cases were not executed. Categories business_knowledge and ambiguous were not reached at all in this run (dataset is ordered simple -> medium -> complex -> business_knowledge -> ambiguous), so clarification precision/recall and business-knowledge grounding are NOT measured by this report.",
+  "not_run_case_ids": [
+    "C3",
+    "C4",
+    "C5",
+    "C6",
+    "C7",
+    "B1",
+    "B2",
+    "B3",
+    "B4",
+    "B5",
+    "B6",
+    "B7",
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "A7",
+    "A8",
+    "A9",
+    "A10",
+    "A11",
+    "A12",
+    "A13",
+    "A14",
+    "A15",
+    "A16",
+    "A17",
+    "A18",
+    "A19",
+    "A20"
+  ],
+  "results": [
+    {
+      "id": "S1",
+      "category": "simple",
+      "question": "How many customers do we have?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 3.4,
+      "correct": true
+    },
+    {
+      "id": "S2",
+      "category": "simple",
+      "question": "How many products do we offer?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 30.8,
+      "correct": true
+    },
+    {
+      "id": "S3",
+      "category": "simple",
+      "question": "List all employees in the engineering department.",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 45.6,
+      "correct": true
+    },
+    {
+      "id": "S4",
+      "category": "simple",
+      "question": "How many support tickets are currently open?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 44.9,
+      "correct": true
+    },
+    {
+      "id": "S5",
+      "category": "simple",
+      "question": "What is the average base price of our products?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 39.9,
+      "correct": true
+    },
+    {
+      "id": "S6",
+      "category": "simple",
+      "question": "How many customers are on the enterprise plan?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": true,
+      "latency_s": 23.8,
+      "correct": false,
+      "note": "false positive: flagged as ambiguous when a gold SQL answer was expected"
+    },
+    {
+      "id": "S7",
+      "category": "simple",
+      "question": "List customers from Germany.",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 47.0,
+      "correct": true
+    },
+    {
+      "id": "S8",
+      "category": "simple",
+      "question": "How many subscriptions are cancelled?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 40.9,
+      "correct": true
+    },
+    {
+      "id": "M1",
+      "category": "medium",
+      "question": "How many customers have submitted at least one support ticket?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 43.9,
+      "correct": true
+    },
+    {
+      "id": "M2",
+      "category": "medium",
+      "question": "What is the total invoiced amount for paid invoices?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 39.8,
+      "correct": true
+    },
+    {
+      "id": "M3",
+      "category": "medium",
+      "question": "How many subscriptions does each plan have?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 42.5,
+      "correct": true
+    },
+    {
+      "id": "M4",
+      "category": "medium",
+      "question": "What is the total quantity of usage events per event type?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 42.1,
+      "correct": true
+    },
+    {
+      "id": "M5",
+      "category": "medium",
+      "question": "List the top 3 most expensive products by base price.",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 41.8,
+      "correct": true
+    },
+    {
+      "id": "M6",
+      "category": "medium",
+      "question": "How many invoices are overdue?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 40.9,
+      "correct": true
+    },
+    {
+      "id": "M7",
+      "category": "medium",
+      "question": "What is the average monthly fee for active subscriptions?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 204.3,
+      "correct": true
+    },
+    {
+      "id": "M8",
+      "category": "medium",
+      "question": "How many customers signed up from each country?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 6.6,
+      "correct": true
+    },
+    {
+      "id": "C1",
+      "category": "complex",
+      "question": "Which customers have never submitted a support ticket?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 57.9,
+      "correct": true
+    },
+    {
+      "id": "C2",
+      "category": "complex",
+      "question": "What is the total paid invoice amount per customer?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 47.8,
+      "correct": true
+    }
+  ],
+  "summary": {
+    "total_cases": 18,
+    "execution_accuracy": 0.9444444444444444,
+    "execution_accuracy_by_category": {
+      "simple": 0.875,
+      "medium": 1.0,
+      "complex": 1.0
+    },
+    "clarification_recall": null,
+    "clarification_precision": 0.0,
+    "clarification_true_positives": 0,
+    "clarification_false_negatives": 0,
+    "clarification_false_positives": 1,
+    "latency_seconds": {
+      "mean": 46.88,
+      "median": 41.95,
+      "p95": 57.9,
+      "max": 204.3
+    }
+  }
+}

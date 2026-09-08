@@ -595,6 +595,70 @@ Instead of manually writing schema documents:
   - Complex joins
   - Queries requiring business knowledge
 
+### 9.4 Internal Eval Results (2026-09-08)
+
+Built the internal eval set at `tests/eval/dataset.json` -- 50 questions against the
+demo SaaS schema: 8 simple, 8 medium, 7 complex, 7 business-knowledge (grounded in
+`knowledge_base/*.md`), and 20 ambiguous (expected to trigger clarification). Harness
+lives at `tests/eval/harness.py`, runnable via `python scripts/run_eval.py`. It measures:
+
+- **Execution accuracy** on non-ambiguous cases -- runs the generated SQL and a
+  hand-written gold SQL against `data/demo.db` and compares result sets. Row/column
+  order and column naming don't matter; a query that returns extra columns (e.g.
+  `SELECT c.*` where gold used `SELECT c.id, c.name`) still counts correct as long as
+  every gold value is present -- an LLM answering with more columns than the minimal
+  gold query isn't a wrong answer.
+- **Clarification precision/recall** -- did the system ask for clarification exactly
+  on the questions that needed it?
+- **Latency** per question.
+
+**Result: only a partial run completed.** Groq's free tier caps at 200,000 tokens/day
+(TPD); the run hit `199,802/200,000 used` and crashed on the 19th case (dataset order
+is simple -> medium -> complex -> business_knowledge -> ambiguous, so **no
+business_knowledge or ambiguous cases were reached** -- clarification precision/recall
+and business-knowledge grounding are not yet measured). Per a judgment call made at
+the time, the partial run was documented rather than spending more of the day's quota
+retrying. Full report: `tests/eval/results/20260908T120446Z_partial.json`.
+
+| Category | Cases run | Execution accuracy |
+|---|---|---|
+| simple | 8/8 | 87.5% (7/8) |
+| medium | 8/8 | 100% (8/8) |
+| complex | 2/7 | 100% (2/2) |
+| business_knowledge | 0/7 | not measured |
+| ambiguous | 0/20 | not measured (clarification precision/recall not measured) |
+| **Overall (non-ambiguous only)** | **18/30** | **94.4% (17/18)** |
+
+Latency (Groq, `qwen/qwen3.8-27b`): mean 46.9s, median 42.0s, p95 57.9s, max 204.3s
+(one call hit a per-minute rate limit and retried with backoff -- see below).
+
+**The one failure (`S6`, "How many customers are on the enterprise plan?")** was a
+false-positive clarification: the system asked for clarification instead of just
+answering, on a question with an unambiguous single filter. This is the clarification
+engine erring toward over-caution rather than a SQL-generation bug.
+
+**Weak spots / follow-ups identified:**
+1. **Groq free-tier daily cap makes a single-session full-suite run infeasible.**
+   At ~10K tokens/case (3-4 LLM calls per question, each carrying full schema +
+   business-rule context), 50 cases need roughly 500K tokens -- 2.5x the daily
+   budget. Either upgrade the Groq tier for eval runs, split the suite across days,
+   or add a cheaper/smaller model option specifically for evaluation.
+2. **Latency is dominated by per-minute rate-limit backoff**, not model think time
+   (the 204s outlier on `M7`) -- expected on the free tier, worth re-measuring on a
+   paid tier before drawing latency conclusions.
+3. **Clarification has at least one false-positive** on a plainly unambiguous
+   single-filter question -- worth a closer look at the ambiguity-detection prompt's
+   confidence threshold (`app/agents/prompts_clarification.py`) once the full 20
+   ambiguous cases can be run for a proper precision/recall number.
+4. **Business-knowledge grounding is entirely unverified by this run** -- rerun
+   needed to confirm MRR/CLV/resolution-time formulas are actually being retrieved
+   and followed correctly under eval conditions (Phase 2 testing checked this
+   informally, not against a fixed gold-SQL set).
+
+**Next step:** re-run `python scripts/run_eval.py` once the Groq daily quota resets
+(or against a provider/tier with more headroom) to get full clarification
+precision/recall and business-knowledge numbers, and update this section.
+
 ---
 
 ## 10. Deployment Strategy

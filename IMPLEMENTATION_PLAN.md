@@ -21,7 +21,7 @@
 | 6 | **Security & Sandbox** | Read-only execution, blocklist, timeouts | ✅ Done |
 | 7 | **Observability** | Langfuse tracing, cost tracking | ✅ Done |
 | 8 | **API & Interface** | FastAPI endpoints + UI (Gradio/frontend) | ✅ Done |
-| 9 | **Evaluation & Benchmarks** | Internal eval set + benchmark runs | 🔲 Not Started |
+| 9 | **Evaluation & Benchmarks** | Internal eval set + benchmark runs | 🟡 Partial (harness done, full run pending) |
 | 10 | **Deployment** | Free-tier deployment + Docker Compose | 🔲 Not Started |
 
 ---
@@ -318,25 +318,36 @@
 **Goal**: Quantify how good the system actually is.
 
 ### Tasks
-- [ ] Create internal eval dataset against our SaaS demo schema
-  - 50-100 question/SQL pairs
-  - Include ~20 ambiguous questions (should trigger clarification)
-  - Include simple, medium, and complex queries
-  - Include questions requiring business knowledge
-- [ ] Implement evaluation harness
-  - Run eval set through the pipeline
-  - Compare generated SQL results against gold standard (execution accuracy)
-  - Measure clarification precision and recall
-  - Measure latency per query
-- [ ] (Optional) Run on Spider/BIRD subsets
-  - Requires adapter for their schema format
-  - Good for bragging rights / README numbers
-- [ ] Document results in DESIGN.md
+- [x] Create internal eval dataset against our SaaS demo schema (`tests/eval/dataset.json`)
+  - 50 question/SQL pairs total
+  - 20 ambiguous questions (should trigger clarification)
+  - 8 simple, 8 medium, 7 complex
+  - 7 questions requiring business knowledge (grounded in `knowledge_base/*.md`)
+- [x] Implement evaluation harness (`tests/eval/harness.py`, run via `python scripts/run_eval.py`)
+  - Runs the eval set through the live pipeline
+  - Compares generated SQL results against gold standard (execution accuracy) --
+    row/column order and column naming don't matter; extra columns beyond gold's
+    still count correct as long as every gold value is present
+  - Measures clarification precision and recall
+  - Measures latency per query
+  - Resilient to a single case's pipeline error (records it and continues, rather
+    than losing the whole run -- added after the first live run crashed mid-way)
+- [ ] (Optional) Run on Spider/BIRD subsets -- skipped (optional per plan)
+- [x] Document results in DESIGN.md (§9.4)
 
 ### Deliverables
-- Evaluation dataset
-- Benchmark results
-- Identified weak spots and improvement opportunities
+- [x] Evaluation dataset (`tests/eval/dataset.json`)
+- [~] Benchmark results -- **partial**: 18/50 cases completed (94.4% execution
+  accuracy on those) before Groq's free-tier daily token cap (200K TPD) was
+  exhausted mid-run; business_knowledge and ambiguous categories (27/50 cases,
+  including all clarification-precision/recall data) were not reached. Documented
+  as-is per a judgment call to not burn more of the day's quota chasing a full run
+  in this session -- see DESIGN.md §9.4 for the full breakdown and next steps.
+- [x] Identified weak spots and improvement opportunities (DESIGN.md §9.4): the
+  Groq free-tier daily cap makes single-session full-suite runs infeasible: one
+  false-positive clarification on an unambiguous question; latency dominated by
+  rate-limit backoff on the free tier; business-knowledge grounding unverified by
+  this run
 
 ---
 
