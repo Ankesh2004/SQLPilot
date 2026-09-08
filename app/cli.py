@@ -16,6 +16,7 @@ load_dotenv()
 
 from app.agents.graph import pipeline
 from app.agents.nodes.handle_clarification import handle_clarification
+from app.observability.tracing import start_trace, end_trace, score_trace
 
 
 def run(question: str) -> None:
@@ -29,6 +30,10 @@ def run(question: str) -> None:
         "user_question": question,
         "sql_dialect": "sqlite",
     }
+
+    # one Langfuse trace covers the whole question, including every
+    # clarification round -- no-op if Langfuse isn't configured
+    trace_token = start_trace("sqlpilot.query", session_id="cli", input=question)
 
     # the clarification loop lives here, not inside the graph
     # graph stops when it needs user input, we collect it, then re-invoke
@@ -85,6 +90,40 @@ def run(question: str) -> None:
         break
 
     _print_results(result)
+    # ask for feedback while the trace is still active so the score attaches to it
+    _collect_feedback()
+
+    # quality metrics: how often did we need to self-correct or ask for
+    # clarification? (see IMPLEMENTATION_PLAN.md Phase 7)
+    end_trace(
+        trace_token,
+        output={
+            "final_status": result.get("final_status"),
+            "generated_sql": result.get("generated_sql"),
+            "explanation": result.get("explanation"),
+        },
+        metadata={
+            "clarification_rounds": result.get("clarification_round", 0),
+            "validation_retry_count": result.get("validation_retry_count", 0),
+            "execution_retry_count": result.get("execution_retry_count", 0),
+            "self_correction_attempts": len(result.get("correction_history", [])),
+        },
+    )
+
+
+def _collect_feedback() -> None:
+    """ask for a thumbs up/down on the result and log it as a Langfuse score."""
+    try:
+        raw = input("Rate this response (1=good, 0=bad, enter to skip): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return
+
+    if raw not in ("0", "1"):
+        return
+
+    score_trace("user_feedback", value=int(raw))
+    print()
 
 
 def _print_results(result: dict) -> None:

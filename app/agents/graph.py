@@ -20,6 +20,7 @@ from app.agents.nodes.correct_sql import correct_sql
 from app.agents.nodes.execute_query import execute_query
 from app.agents.nodes.explain_results import explain_results
 from app.security.rate_limiter import rate_limiter
+from app.observability.tracing import traced_node
 
 
 # --- routing functions ---
@@ -150,17 +151,18 @@ def build_graph() -> StateGraph:
     """
     graph = StateGraph(AgentState)
 
-    # add all nodes
-    graph.add_node("rate_limit_guard", _rate_limit_guard)
-    graph.add_node("retrieve_context", retrieve_context)
-    graph.add_node("check_ambiguity", check_ambiguity)
-    graph.add_node("stop_for_clarification", _stop_for_clarification)
-    graph.add_node("generate_sql", generate_sql)
-    graph.add_node("validate_sql", validate_sql_node)
-    graph.add_node("correct_sql", correct_sql)
-    graph.add_node("execute_query", execute_query)
-    graph.add_node("explain_results", explain_results)
-    graph.add_node("explain_with_error", _explain_with_error)
+    # add all nodes -- wrapped with traced_node so each run shows up as a
+    # Langfuse span nested under the request's trace (no-op if tracing is off)
+    graph.add_node("rate_limit_guard", traced_node("rate_limit_guard")(_rate_limit_guard))
+    graph.add_node("retrieve_context", traced_node("retrieve_context")(retrieve_context))
+    graph.add_node("check_ambiguity", traced_node("check_ambiguity")(check_ambiguity))
+    graph.add_node("stop_for_clarification", traced_node("stop_for_clarification")(_stop_for_clarification))
+    graph.add_node("generate_sql", traced_node("generate_sql")(generate_sql))
+    graph.add_node("validate_sql", traced_node("validate_sql")(validate_sql_node))
+    graph.add_node("correct_sql", traced_node("correct_sql")(correct_sql))
+    graph.add_node("execute_query", traced_node("execute_query")(execute_query))
+    graph.add_node("explain_results", traced_node("explain_results")(explain_results))
+    graph.add_node("explain_with_error", traced_node("explain_with_error")(_explain_with_error))
 
     # entry: rate limit check first
     graph.set_entry_point("rate_limit_guard")

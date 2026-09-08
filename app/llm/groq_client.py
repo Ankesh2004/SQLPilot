@@ -12,6 +12,7 @@ from groq import Groq
 
 from app.llm.base import BaseLLMClient
 from app.config import settings
+from app.observability.tracing import log_generation
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,9 @@ class GroqClient(BaseLLMClient):
         messages.append({"role": "user", "content": prompt})
 
         response = self._call_with_retry(messages, json_mode=False)
-        return response.choices[0].message.content.strip()
+        text = response.choices[0].message.content.strip()
+        self._log_generation("groq.generate", prompt, text, response)
+        return text
 
     def generate_structured(self, prompt: str, system_prompt: str = "") -> dict:
         """
@@ -55,6 +58,7 @@ class GroqClient(BaseLLMClient):
 
         response = self._call_with_retry(messages, json_mode=True)
         raw = response.choices[0].message.content.strip()
+        self._log_generation("groq.generate_structured", prompt, raw, response)
 
         # strip code fences if the model wraps JSON anyway
         if raw.startswith("```"):
@@ -67,6 +71,19 @@ class GroqClient(BaseLLMClient):
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse Groq JSON response: {e}\nRaw: {raw}")
             return {"sql": raw, "assumptions": "Failed to parse structured response"}
+
+    def _log_generation(self, name: str, prompt: str, output: str, response) -> None:
+        """report token usage for this call to Langfuse (no-op if tracing is disabled)."""
+        usage_obj = getattr(response, "usage", None)
+        usage = None
+        if usage_obj is not None:
+            usage = {
+                "input": getattr(usage_obj, "prompt_tokens", None),
+                "output": getattr(usage_obj, "completion_tokens", None),
+                "total": getattr(usage_obj, "total_tokens", None),
+                "unit": "TOKENS",
+            }
+        log_generation(name, self.model, prompt, output, usage=usage)
 
     def _call_with_retry(self, messages, json_mode=False):
         """call with backoff on rate limits."""

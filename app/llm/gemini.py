@@ -14,6 +14,7 @@ from google.genai.errors import ClientError, ServerError
 
 from app.llm.base import BaseLLMClient
 from app.config import settings
+from app.observability.tracing import log_generation
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,9 @@ class GeminiClient(BaseLLMClient):
         )
 
         response = self._call_with_retry(prompt, config)
-        return response.text.strip()
+        text = response.text.strip()
+        self._log_generation("gemini.generate", prompt, text, response)
+        return text
 
     def generate_structured(self, prompt: str, system_prompt: str = "") -> dict:
         """
@@ -61,6 +64,7 @@ class GeminiClient(BaseLLMClient):
 
         response = self._call_with_retry(prompt, config)
         raw = response.text.strip()
+        self._log_generation("gemini.generate_structured", prompt, raw, response)
 
         # sometimes the model wraps JSON in code fences anyway
         if raw.startswith("```"):
@@ -73,6 +77,19 @@ class GeminiClient(BaseLLMClient):
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse LLM JSON response: {e}\nRaw: {raw}")
             return {"sql": raw, "assumptions": "Failed to parse structured response"}
+
+    def _log_generation(self, name: str, prompt: str, output: str, response) -> None:
+        """report token usage for this call to Langfuse (no-op if tracing is disabled)."""
+        usage_meta = getattr(response, "usage_metadata", None)
+        usage = None
+        if usage_meta is not None:
+            usage = {
+                "input": getattr(usage_meta, "prompt_token_count", None),
+                "output": getattr(usage_meta, "candidates_token_count", None),
+                "total": getattr(usage_meta, "total_token_count", None),
+                "unit": "TOKENS",
+            }
+        log_generation(name, self.model, prompt, output, usage=usage)
 
     def _call_with_retry(self, prompt, config):
         """

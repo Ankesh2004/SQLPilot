@@ -61,5 +61,39 @@ For multi-step tasks, state a brief plan:
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
 ---
+## 5. Coding Standards
+
+**Style & formatting:**
+- Python: follow PEP 8
+- TypeScript: follow Google TypeScript style
+- Markdown: treat as HTML (semantic tags, proper structure)
+- SQL: uppercase keywords, snake_case identifiers, use CTEs for readability
+
+**Testing:**
+- Unit tests: pytest (Python), Vitest (TypeScript)
+- Integration tests: use Docker Compose for external services
+- End-to-end: Playwright for browser automation
+- Tests MUST pass before code is considered complete
+
+**Security:**
+- Never commit secrets or API keys
+- Use environment variables for sensitive config
+- Always sanitize user inputs
+- Enforce rate limiting and input validation
+- Follow OWASP Top 10 for web applications
+
+**Performance:**
+- Cache expensive operations
+- Use efficient algorithms (know Big-O)
+- Index database tables appropriately
+- Avoid N+1 queries
+
+**Documentation:**
+- Inline comments for complex logic
+- Docstrings/JSDoc for all public APIs
+- READMEs for new modules/services
+- Keep docs updated with code changes
+
+---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

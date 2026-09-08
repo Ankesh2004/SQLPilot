@@ -19,7 +19,7 @@
 | 4 | **Self-Correction & Validation** | SQLGlot validation + retry loops | ✅ Done |
 | 5 | **Self-Consistency** *(post-MVP)* | Multi-candidate generation + voting | 🔲 Not Started |
 | 6 | **Security & Sandbox** | Read-only execution, blocklist, timeouts | ✅ Done |
-| 7 | **Observability** | Langfuse tracing, cost tracking | 🔲 Not Started |
+| 7 | **Observability** | Langfuse tracing, cost tracking | ✅ Done |
 | 8 | **API & Interface** | FastAPI endpoints + UI (Gradio/frontend) | 🔲 Not Started |
 | 9 | **Evaluation & Benchmarks** | Internal eval set + benchmark runs | 🔲 Not Started |
 | 10 | **Deployment** | Free-tier deployment + Docker Compose | 🔲 Not Started |
@@ -236,24 +236,33 @@
 **Goal**: See exactly what the system is doing on every request.
 
 ### Tasks
-- [ ] Integrate Langfuse Cloud (free tier, 50K observations/month)
-  - Set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in .env
-  - Wrap each LangGraph node as a Langfuse Span
-  - Log RAG retrieval results
-  - Log clarification dialogues
-  - Log validation attempts and errors
-- [ ] Implement cost tracking
-  - Track tokens used per request
-  - Aggregate daily/weekly cost estimates
-- [ ] Implement quality monitoring
-  - Log user feedback (thumbs up/down on results)
-  - Track self-correction rate (how often does the system retry?)
-  - Track clarification trigger rate
+- [x] Integrate Langfuse Cloud (free tier, 50K observations/month)
+  - Set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in .env (LANGFUSE_HOST must match the
+    key's region -- these keys are on the `jp` region, not the global default)
+  - Wrap each LangGraph node as a Langfuse Span (`app/observability/tracing.py::traced_node`,
+    applied to every node in `graph.py`)
+  - Log RAG retrieval results, clarification dialogues, validation attempts and errors --
+    captured automatically as span input/output since node dict returns already carry this
+    state (schema_context, clarification_question/options, validation_error, etc.)
+  - One Langfuse trace per user question, spanning every clarification round
+    (`start_trace`/`end_trace` in `cli.py`)
+- [x] Implement cost tracking
+  - Both LLM clients (`GeminiClient`, `GroqClient`) log a Langfuse generation per call with
+    prompt/completion/total token counts; Langfuse Cloud computes cost from its model pricing
+    table and aggregates it on the dashboard (no custom aggregator needed)
+- [x] Implement quality monitoring
+  - CLI prompts for thumbs up/down after each answer, logged as a `user_feedback` trace score
+  - Self-correction rate (`correction_history` length) and clarification round count logged as
+    trace metadata on every run
 
 ### Deliverables
-- Full request traces in Langfuse dashboard
-- Token/cost tracking
-- Quality metrics dashboard
+- [x] Full request traces in Langfuse dashboard (verified against Langfuse Cloud: node spans,
+  nested LLM generations with token usage, multi-round clarification nesting under one trace,
+  security-blocklist error path, and user feedback score all confirmed via the Langfuse API)
+- [x] Token/cost tracking (token counts confirmed on generations; cost depends on Langfuse
+  recognizing the model name in its pricing table)
+- [x] Quality metrics dashboard (self-correction attempts + clarification rounds in trace
+  metadata, thumbs up/down as trace scores -- all queryable/aggregable in Langfuse Cloud)
 
 ---
 
