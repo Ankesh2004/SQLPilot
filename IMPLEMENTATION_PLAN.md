@@ -2,9 +2,9 @@
 
 > Phased roadmap. Each phase builds on the previous one.
 > Depends on decisions made in [DESIGN.md](file:///c:/UNIVERSE/Projects/SQLPilot/DESIGN.md).
-> Last updated: 2026-09-07
+> Last updated: 2026-09-08
 >
-> **Finalized Stack**: LangGraph | Gemini Flash | ChromaDB | sentence-transformers | SQLGlot | FastAPI | Streamlit | Langfuse Cloud | Render + Streamlit Cloud
+> **Finalized Stack**: LangGraph | Gemini Flash | ChromaDB (bundled MiniLM embedder) | SQLGlot | FastAPI | Streamlit | Langfuse Cloud | Docker | Render + Streamlit Cloud
 
 ---
 
@@ -21,8 +21,8 @@
 | 6 | **Security & Sandbox** | Read-only execution, blocklist, timeouts | ✅ Done |
 | 7 | **Observability** | Langfuse tracing, cost tracking | ✅ Done |
 | 8 | **API & Interface** | FastAPI endpoints + UI (Gradio/frontend) | ✅ Done |
-| 9 | **Evaluation & Benchmarks** | Internal eval set + benchmark runs | 🟡 Partial (harness done, full run pending) |
-| 10 | **Deployment** | Free-tier deployment + Docker Compose | 🔲 Not Started |
+| 9 | **Evaluation & Benchmarks** | Internal eval set + benchmark runs | 🟡 Full run done, 12 ambiguous cases pending quota reset |
+| 10 | **Deployment** | Free-tier deployment + Docker Compose | ✅ Done |
 
 ---
 
@@ -332,22 +332,65 @@
   - Measures latency per query
   - Resilient to a single case's pipeline error (records it and continues, rather
     than losing the whole run -- added after the first live run crashed mid-way)
-- [ ] (Optional) Run on Spider/BIRD subsets -- skipped (optional per plan)
+- [ ] (Optional) Run on Spider/BIRD subsets -- skipped for the initial run (optional
+  per plan); now scoped as a follow-up, see the three-layer suite below
 - [x] Document results in DESIGN.md (§9.4)
+
+### Follow-up: Three-Layer Evaluation Suite (planned, not started)
+
+Decision: use **BIRD** as the public benchmark layer (see DESIGN.md §9.5 for the
+full rationale and comparison against Spider 1.0/2.0 and WikiSQL). Don't replace
+the existing custom dataset -- add two more layers alongside it, since each tests
+something the others can't.
+
+- [ ] **Layer 1 -- BIRD integration**
+  - [ ] Download a BIRD dev-set subset (~50-100 questions across difficulty levels,
+    not the full 12,751-pair set -- the Groq free-tier daily cap already can't
+    clear our 50-question custom set in one session, per §9.4)
+  - [ ] Adapt the harness to load the correct SQLite DB per question (BIRD spans 95
+    DBs, vs. our single `data/demo.db`) -- `rows_match()` in
+    `tests/eval/harness.py` is dataset-agnostic and can be reused as-is
+  - [ ] Run execution-accuracy only (no clarification scoring -- BIRD questions
+    aren't labeled ambiguous)
+  - [ ] Document results in a new DESIGN.md §9.6
+- [ ] **Layer 2 -- existing custom suite**: unchanged, already covered by §9.4
+  (clarification precision/recall, business-knowledge grounding)
+- [ ] **Layer 3 -- adversarial suite (new dataset, ~200-500 cases)**
+  - [ ] Build a dataset covering prompt injection, destructive-intent questions,
+    schema hallucination, and sensitive-column probing
+  - [ ] Measure attack success rate, schema hallucination rate, unsafe-SQL-generation
+    rate
+  - [ ] Complements (doesn't duplicate) the Phase 6 security-blocklist unit tests in
+    `tests/unit/` -- those test the blocklist/read-only/timeout layer in isolation;
+    this suite runs end-to-end through RAG + clarification + generation
+- [ ] **Baseline-vs-pipeline ablation experiment**: once Layer 1 exists, run the
+  same BIRD subset through a direct LLM-to-SQL call (no RAG/clarification/
+  validation/self-correction) vs. the full SQLPilot pipeline, and compare execution
+  accuracy to quantify what RAG + ambiguity detection + validation + self-correction
+  actually contribute
+
+Sequencing: pick this up after the 12 quota-blocked ambiguous cases from the
+2026-09-11 run (§9.4) are re-run once Groq's quota resets.
 
 ### Deliverables
 - [x] Evaluation dataset (`tests/eval/dataset.json`)
-- [~] Benchmark results -- **partial**: 18/50 cases completed (94.4% execution
-  accuracy on those) before Groq's free-tier daily token cap (200K TPD) was
-  exhausted mid-run; business_knowledge and ambiguous categories (27/50 cases,
-  including all clarification-precision/recall data) were not reached. Documented
-  as-is per a judgment call to not burn more of the day's quota chasing a full run
-  in this session -- see DESIGN.md §9.4 for the full breakdown and next steps.
+- [~] Benchmark results -- **full run completed 2026-09-11** (all 50/50 cases
+  reached, up from the 2026-09-08 partial run's 18/50): 86.7% execution accuracy
+  overall (simple 87.5%, medium 100%, complex 71.4%, business_knowledge 85.7%).
+  Clarification precision 88.9%, but recall only 40% -- 12 of the 20 ambiguous
+  cases hit the same 200K TPD Groq daily cap again near the end of the run and
+  failed with a rate-limit error rather than a real model answer, so recall is
+  understated rather than a true measure of the detector. See DESIGN.md §9.4 for
+  the full breakdown, per-case failure analysis, and next steps.
 - [x] Identified weak spots and improvement opportunities (DESIGN.md §9.4): the
-  Groq free-tier daily cap makes single-session full-suite runs infeasible: one
-  false-positive clarification on an unambiguous question; latency dominated by
-  rate-limit backoff on the free tier; business-knowledge grounding unverified by
-  this run
+  Groq free-tier daily cap still makes a single-session full-suite run unreliable
+  even spread across ~35 minutes; the `S6` false-positive clarification reproduced
+  on both the 09-08 and 09-11 runs (now a repeatable finding, not a one-off); two
+  of the three genuine (non-quota) failures are column-choice mismatches where the
+  model picked a different but still-reasonable column than gold expected; one
+  failure is a rounding-precision mismatch between generated SQL's own `ROUND()`
+  and the eval's comparison precision; business-knowledge grounding is now
+  verified (6/7 correct)
 
 ---
 
@@ -356,26 +399,59 @@
 **Goal**: Make it easy for anyone to run SQLPilot.
 
 ### Tasks
-- [ ] Docker Compose setup
-  - All services in one `docker-compose up`
-  - Environment variable configuration
-- [ ] Free-tier deployment guide
-  - Step-by-step for Render (FastAPI backend)
-  - Step-by-step for Streamlit Community Cloud (frontend)
-  - Include .env setup instructions
-- [ ] CI/CD pipeline (GitHub Actions)
-  - Run tests on PR
-  - Auto-deploy to Render on merge to main
-- [ ] Update README.md with:
-  - Architecture diagram
-  - Quick start guide
-  - Benchmark results
-  - Screenshots / demo GIF
+- [x] Docker Compose setup (`Dockerfile`, `docker-compose.yml`, `docker/entrypoint.sh`)
+  - Both services from one image; `api` runs uvicorn, `ui` runs Streamlit
+    against it over the compose network
+  - Self-bootstrapping: the entrypoint seeds `data/demo.db` and builds the
+    ChromaDB index into a named volume on first boot (gated on
+    `SQLPILOT_BOOTSTRAP=1`, so only the API container does it)
+  - Non-root user, health check, `.dockerignore`; final image is 304 MB
+  - Dropped the unused `sentence-transformers` dependency -- nothing imported it
+    (ChromaDB bundles its own ONNX MiniLM embedder), and it would have pulled
+    torch in for a multi-GB image that can't fit a free tier
+  - Added the missing `groq` dependency -- `app/llm/groq_client.py` imports it
+    but neither requirements.txt nor pyproject.toml declared it, so a container
+    with `LLM_PROVIDER=groq` would have crashed on first request
+- [x] Free-tier deployment guide (`DEPLOYMENT.md`)
+  - Docker Compose, Render (blueprint + manual), Streamlit Community Cloud
+  - Full env-var reference, verification curls, troubleshooting table
+  - Free-tier caveats stated honestly: no persistent disk (so data/ is rebuilt
+    each cold boot), idle spin-down, 512 MB headroom, and the single-worker
+    constraint imposed by the in-memory session store and rate limiter
+  - `render.yaml` blueprint committed for one-click setup
+- [x] CI/CD pipeline (GitHub Actions)
+  - `ci.yml`: ruff + unit tests on every PR, plus a separate job that builds the
+    image and smoke-tests `/health` inside the container
+  - Lint is advisory -- 89 pre-existing ruff findings (line length, import
+    order, and deliberate E402s where `load_dotenv()` precedes app imports).
+    Flip to blocking after a cleanup pass.
+  - `deploy.yml`: triggers a Render deploy hook after CI passes on main;
+    no-ops cleanly when `RENDER_DEPLOY_HOOK_URL` isn't set, so forks aren't broken
+  - Added `tests/unit/` (31 offline tests, no API key) since CI had nothing to
+    run: validator + all three security layers, rate limiter, read-only /
+    timeout / row-cap enforcement at the connection, and API status codes
+- [x] Update README.md with:
+  - [x] Architecture diagram (already present -- Mermaid state machine)
+  - [x] Quick start guide (Docker first, from-source second)
+  - [x] Benchmark results (already present -- Phase 9 partial-run table)
+  - [x] Demo GIF + screenshots (`docs/`), recorded against the containerized
+        stack showing the clarification flow end to end
+  - [x] New Testing and Deployment sections
 
 ### Deliverables
-- One-command local setup via Docker Compose
-- Deployed demo on free tier
-- Comprehensive README
+- [x] One-command local setup via Docker Compose (verified: `docker compose up`
+      bootstrapped 7 schema chunks + 6 business rules, health check green, and a
+      live question returned correct SQL + results + explanation through the
+      containerized API)
+- [~] Deployed demo on free tier -- **not deployed**. Everything needed is in
+      the repo (`render.yaml`, `DEPLOYMENT.md`, deploy workflow), but pushing to
+      Render/Streamlit Cloud requires account access this session didn't have.
+- [x] Comprehensive README
+
+### Fixed along the way
+- Streamlit rendered currency in explanations as LaTeX: two `$` amounts in one
+  sentence made everything between them italic math. `streamlit_app.py` now
+  escapes `$` before `st.write`. Caught while recording the demo GIF.
 
 ---
 

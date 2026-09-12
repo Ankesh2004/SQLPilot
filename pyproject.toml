@@ -17,10 +17,10 @@ dependencies = [
 
     # LLM providers (provider-agnostic, start with Gemini)
     "google-genai>=1.0.0",
+    "groq>=1.0.0",
 
-    # RAG: vector store + embeddings
+    # RAG: vector store + embeddings (chroma bundles an ONNX MiniLM embedder)
     "chromadb>=0.6.0",
-    "sentence-transformers>=3.0.0",
 
     # SQL validation
     "sqlglot>=26.0.0",

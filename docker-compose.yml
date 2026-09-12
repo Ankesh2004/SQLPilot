@@ -1,0 +1,54 @@
+# One-command local SQLPilot: FastAPI backend + Streamlit UI.
+#
+#   cp .env.example .env   # fill in your LLM key first
+#   docker compose up --build
+#
+# UI:   http://localhost:8501
+# API:  http://localhost:8000/docs
+#
+# Both services run the same image; the API bootstraps the demo database and
+# the RAG index into a named volume on first boot, so `up` is all you need.
+
+services:
+  api:
+    build: .
+    image: sqlpilot:latest
+    env_file: .env
+    environment:
+      # bootstrap the demo DB + RAG index on first boot (see docker/entrypoint.sh)
+      SQLPILOT_BOOTSTRAP: "1"
+      SQLITE_DB_PATH: data/demo.db
+      CHROMA_PERSIST_DIR: data/chroma
+    ports:
+      - "8000:8000"
+    volumes:
+      - sqlpilot-data:/app/data
+    healthcheck:
+      # python instead of curl -- the slim base image has no curl
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      # first boot seeds the DB and downloads the embedding model
+      start_period: 180s
+
+  ui:
+    build: .
+    image: sqlpilot:latest
+    env_file: .env
+    environment:
+      SQLPILOT_API_URL: http://api:8000
+    command:
+      - streamlit
+      - run
+      - streamlit_app.py
+      - --server.port=8501
+      - --server.address=0.0.0.0
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  sqlpilot-data:

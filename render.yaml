@@ -1,0 +1,45 @@
+# Render Blueprint for the SQLPilot API.
+#
+# In the Render dashboard: New -> Blueprint -> point at this repo. Render reads
+# this file, builds the Dockerfile, and prompts for the secret env vars marked
+# sync: false below.
+#
+# Free tier notes:
+#   - No persistent disk, so data/ is ephemeral. The entrypoint re-seeds the
+#     demo database and rebuilds the RAG index on every cold boot -- fine for a
+#     demo, and it keeps the service stateless.
+#   - Free instances spin down when idle; the first request after that pays the
+#     cold-boot cost (seed + index + embedding model download).
+
+services:
+  - type: web
+    name: sqlpilot-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: SQLPILOT_BOOTSTRAP
+        value: "1"
+      - key: SQLITE_DB_PATH
+        value: data/demo.db
+      - key: CHROMA_PERSIST_DIR
+        value: data/chroma
+      # mirrors .env.example -- switch to groq here if that's your provider
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: LLM_MODEL
+        value: gemini-2.0-flash
+      - key: LOG_LEVEL
+        value: INFO
+      # secrets -- set these in the Render dashboard, never in this file
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false
+      - key: LANGFUSE_SECRET_KEY
+        sync: false
+      - key: LANGFUSE_HOST
+        sync: false

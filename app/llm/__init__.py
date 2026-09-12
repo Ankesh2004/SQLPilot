@@ -16,5 +16,8 @@ def get_llm_client() -> BaseLLMClient:
     elif settings.llm_provider == "groq":
         from app.llm.groq_client import GroqClient
         return GroqClient()
+    elif settings.llm_provider == "ollama":
+        from app.llm.ollama_client import OllamaClient
+        return OllamaClient()
     else:
         raise ValueError(f"Unknown LLM provider: {settings.llm_provider}")

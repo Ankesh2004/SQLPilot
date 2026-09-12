@@ -11,10 +11,11 @@ class Settings(BaseSettings):
     """all the knobs for SQLPilot, loaded from .env or environment."""
 
     # --- LLM ---
-    llm_provider: Literal["gemini", "groq"] = "gemini"
+    llm_provider: Literal["gemini", "groq", "ollama"] = "gemini"
     llm_model: str = "gemini-2.0-flash"
     gemini_api_key: str = ""
     groq_api_key: str = ""  # optional, for future use
+    ollama_base_url: str = "http://localhost:11434"  # local model, no API key needed
 
     # --- Database ---
     db_type: Literal["sqlite", "postgres"] = "sqlite"

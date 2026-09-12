@@ -1,0 +1,37 @@
+name: Deploy
+
+# Auto-deploys the API to Render after CI passes on main.
+#
+# Setup (one time): create the service on Render, copy its deploy hook URL from
+# Settings -> Deploy Hook, and add it as the repository secret
+# RENDER_DEPLOY_HOOK_URL. Without that secret this workflow no-ops, so forks
+# and clones aren't broken by it.
+#
+# The Streamlit UI is deployed by Streamlit Community Cloud, which watches the
+# repo itself -- there's nothing to trigger from here. See DEPLOYMENT.md.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  render:
+    name: Trigger Render deploy
+    runs-on: ubuntu-latest
+    # workflow_dispatch has no upstream conclusion, so allow it through too
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Call Render deploy hook
+        env:
+          DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$DEPLOY_HOOK" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL is not set -- skipping deploy."
+            echo "See DEPLOYMENT.md to wire this up."
+            exit 0
+          fi
+          curl -fsS -X POST "$DEPLOY_HOOK"
+          echo "Render deploy triggered."

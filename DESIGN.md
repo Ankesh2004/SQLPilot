@@ -84,7 +84,7 @@ User Question
 |---|---|---|
 | **Orchestration** | LangGraph | Cycles, human-in-the-loop, persistence — built for our use case |
 | **LLM** | Gemini Flash (primary), provider-agnostic interface | Free tier, good context window, swap via config |
-| **Embedding** | sentence-transformers (all-MiniLM-L6-v2) | Local, free, no API dependency |
+| **Embedding** | all-MiniLM-L6-v2, bundled with ChromaDB (ONNX runtime) | Local, free, no API dependency, no torch |
 | **Vector DB** | ChromaDB (in-process) | Zero-config, no Docker, deploys on Render free tier |
 | **SQL Validation** | SQLGlot | AST parsing, dialect transpilation, security checks |
 | **Target DBs** | SQLite (demo) + PostgreSQL (production) | Zero-infra demos, production-grade when needed |
@@ -570,7 +570,7 @@ Instead of manually writing schema documents:
 | Benchmark | What It Tests | Difficulty | Our Use |
 |---|---|---|---|
 | **Spider 1.0** | Cross-database, multi-table SQL | Medium | Baseline sanity check |
-| **BIRD** | Real-world dirty schemas, 12K+ pairs | Hard | Primary evaluation target |
+| **BIRD** | Real-world dirty schemas, 12,751+ pairs across 95 DBs | Hard | Primary public benchmark (planned, §9.5) |
 | **Spider 2.0** | Enterprise-scale (BigQuery/Snowflake) | Very Hard | Aspirational / future |
 | **WikiSQL** | Single-table simple queries | Easy | Quick smoke tests |
 
@@ -595,7 +595,7 @@ Instead of manually writing schema documents:
   - Complex joins
   - Queries requiring business knowledge
 
-### 9.4 Internal Eval Results (2026-09-08)
+### 9.4 Internal Eval Results (2026-09-11, full run)
 
 Built the internal eval set at `tests/eval/dataset.json` -- 50 questions against the
 demo SaaS schema: 8 simple, 8 medium, 7 complex, 7 business-knowledge (grounded in
@@ -612,52 +612,156 @@ lives at `tests/eval/harness.py`, runnable via `python scripts/run_eval.py`. It 
   on the questions that needed it?
 - **Latency** per question.
 
-**Result: only a partial run completed.** Groq's free tier caps at 200,000 tokens/day
-(TPD); the run hit `199,802/200,000 used` and crashed on the 19th case (dataset order
-is simple -> medium -> complex -> business_knowledge -> ambiguous, so **no
-business_knowledge or ambiguous cases were reached** -- clarification precision/recall
-and business-knowledge grounding are not yet measured). Per a judgment call made at
-the time, the partial run was documented rather than spending more of the day's quota
-retrying. Full report: `tests/eval/results/20260908T120446Z_partial.json`.
+**Result: all 50 cases completed**, three days after the first partial run (the
+original 2026-09-08 attempt stopped 18 cases in on the same Groq daily cap -- see
+`tests/eval/results/20260908T120446Z_partial.json` for that earlier report). This
+run reached every category, but the **last 12 of 20 ambiguous cases hit the same
+200K TPD Groq cap again** near the end of the run and failed with `RateLimitError`
+rather than a model answer -- those count as false negatives in the recall number
+below, so clarification recall is understated, not a true measure of the ambiguity
+detector's ceiling. Full report: `tests/eval/results/20260911T161252Z.json`.
 
 | Category | Cases run | Execution accuracy |
 |---|---|---|
 | simple | 8/8 | 87.5% (7/8) |
 | medium | 8/8 | 100% (8/8) |
-| complex | 2/7 | 100% (2/2) |
-| business_knowledge | 0/7 | not measured |
-| ambiguous | 0/20 | not measured (clarification precision/recall not measured) |
-| **Overall (non-ambiguous only)** | **18/30** | **94.4% (17/18)** |
+| complex | 7/7 | 71.4% (5/7) |
+| business_knowledge | 7/7 | 85.7% (6/7) |
+| ambiguous | 20/20 (8 answered, 12 quota-blocked) | recall 40% (TP=8, FN=12), precision 88.9% (1 FP) |
+| **Overall (non-ambiguous only)** | **30/30** | **86.7% (26/30)** |
 
-Latency (Groq, `qwen/qwen3.8-27b`): mean 46.9s, median 42.0s, p95 57.9s, max 204.3s
-(one call hit a per-minute rate limit and retried with backoff -- see below).
+Latency (Groq, `qwen/qwen3.8-27b`): mean 32.4s, median 40.5s, p95 45.6s, max 64.9s.
+Meaningfully lower and tighter than the 2026-09-08 run (mean 46.9s, max 204.3s) --
+that run's outlier was a per-minute rate-limit backoff; this run avoided most of
+those by spacing calls, only hitting the *daily* cap right at the end.
 
-**The one failure (`S6`, "How many customers are on the enterprise plan?")** was a
-false-positive clarification: the system asked for clarification instead of just
-answering, on a question with an unambiguous single filter. This is the clarification
-engine erring toward over-caution rather than a SQL-generation bug.
+**Failures, by cause:**
+1. **`S6`** (false-positive clarification, same as the 09-08 run) -- "How many
+   customers are on the enterprise plan?" still gets flagged as ambiguous when it
+   shouldn't be. Reproduces consistently; see follow-up #2 below.
+2. **`C3`** ("Which customers have more than one active subscription?") -- generated
+   `SELECT c.id, c.name, c.email ... HAVING COUNT(s.id) > 1`, correctly filtering the
+   right customers but never selecting the subscription count gold expects
+   (`SELECT customer_id, COUNT(*) ... HAVING COUNT(*) > 1`). Right customers, wrong
+   columns -- the eval's execution-accuracy check requires every gold value present
+   in the generated row, and a missing count column fails that even though the
+   filtering logic is correct.
+3. **`C5`** ("List the 5 customers with the highest number of usage events...") --
+   generated `customer.name` where gold used `customer_id`; a friendlier answer for
+   a human reader, but the literal values differ from gold so it fails the
+   value-matching check. Same shape of failure as `C3`: correct logic, different
+   column choice than gold anticipated.
+4. **`B5`** ("average support ticket resolution time, in hours") -- generated SQL
+   wraps the average in `ROUND(..., 1)`; gold leaves it unrounded. The harness
+   rounds both sides to 2 decimals before comparing, but a value already rounded to
+   1 decimal in SQL can land on a different 2-decimal value than the unrounded gold
+   average, so the two don't reconcile even though the formula is identical.
+5. **`A8`-`A14`, `A16`-`A20`** (12 ambiguous cases) -- all failed with Groq
+   `RateLimitError: ... tokens per day (TPD): Limit 200000` rather than a model
+   answer. Not a system defect; see follow-up #1.
 
 **Weak spots / follow-ups identified:**
-1. **Groq free-tier daily cap makes a single-session full-suite run infeasible.**
-   At ~10K tokens/case (3-4 LLM calls per question, each carrying full schema +
-   business-rule context), 50 cases need roughly 500K tokens -- 2.5x the daily
-   budget. Either upgrade the Groq tier for eval runs, split the suite across days,
-   or add a cheaper/smaller model option specifically for evaluation.
-2. **Latency is dominated by per-minute rate-limit backoff**, not model think time
-   (the 204s outlier on `M7`) -- expected on the free tier, worth re-measuring on a
-   paid tier before drawing latency conclusions.
-3. **Clarification has at least one false-positive** on a plainly unambiguous
-   single-filter question -- worth a closer look at the ambiguity-detection prompt's
-   confidence threshold (`app/agents/prompts_clarification.py`) once the full 20
-   ambiguous cases can be run for a proper precision/recall number.
-4. **Business-knowledge grounding is entirely unverified by this run** -- rerun
-   needed to confirm MRR/CLV/resolution-time formulas are actually being retrieved
-   and followed correctly under eval conditions (Phase 2 testing checked this
-   informally, not against a fixed gold-SQL set).
+1. **Groq free-tier daily cap still makes a single-session full-suite run
+   unreliable.** Even spread across ~35 real minutes, 50 cases (3-4 LLM calls each,
+   carrying full schema + business-rule context) burn through the 200K TPD budget
+   before the ambiguous category finishes. Either upgrade the Groq tier for eval
+   runs, split the suite across two sessions/days, or add a cheaper/smaller model
+   option specifically for evaluation.
+2. **The `S6` false-positive clarification reproduced on both runs (09-08 and
+   09-11)** on the same unambiguous single-filter question -- this is now a
+   repeatable finding, not a one-off. Worth a closer look at the ambiguity-detection
+   prompt's confidence threshold (`app/agents/prompts_clarification.py`).
+3. **Two of three genuine (non-quota) failures are column-choice mismatches, not
+   logic errors** (`C3`, `C5`) -- the model picks a different, still-reasonable
+   column than the gold answer expected. Worth deciding whether to loosen the eval's
+   matching rule (e.g. accept an id-for-name substitution) or tighten prompts to
+   match gold column conventions more closely.
+4. **`B5` suggests self-rounding in generated SQL can fight the eval's own
+   rounding-for-comparison step** -- worth normalizing eval comparison to a coarser
+   precision (e.g. round to whole hours for time-duration questions) rather than a
+   fixed 2 decimals for every numeric column.
+5. **Business-knowledge grounding is now verified**: 6/7 correct, with the one
+   miss being the `B5` rounding mismatch above rather than a wrong formula --
+   confirms Phase 2's informal check that MRR/CLV/resolution-time definitions are
+   being retrieved and applied correctly.
 
-**Next step:** re-run `python scripts/run_eval.py` once the Groq daily quota resets
-(or against a provider/tier with more headroom) to get full clarification
-precision/recall and business-knowledge numbers, and update this section.
+**Next step:** once Groq's quota resets, re-run just the 12 quota-blocked ambiguous
+cases (`A8`-`A14`, `A16`-`A20`) to get a clean clarification-recall number, and
+investigate the `S6` false positive since it's now reproduced twice.
+
+### 9.5 Planned: Three-Layer Evaluation Suite (public benchmark + custom + adversarial)
+
+**Status: planned, not started.** The internal 50-question set in §9.4 tests
+SQLPilot's own behavior well (clarification, business-knowledge grounding) but says
+nothing about how it holds up against a public, independently-authored benchmark.
+The plan is to add two more evaluation layers alongside the existing one rather than
+replace it -- each layer tests something the others can't:
+
+```
+                    SQLPilot Evaluation
+                           |
+          +----------------+----------------+
+          |                |                |
+          v                v                v
+     Public Benchmark  Custom Suite    Adversarial Suite
+          |                |                |
+          v                v                v
+        BIRD          (existing 50Q,   Prompt injection,
+                        §9.4: business   destructive SQL,
+                        rules, ambiguity, schema hallucination,
+                        clarification)   unsafe generation
+```
+
+**Layer 1 -- BIRD.** Chosen over Spider 1.0/2.0 and WikiSQL as the starting public
+benchmark: BIRD's databases are large and intentionally "dirty" (real column names,
+messy schemas), which is a closer match to SQLPilot's RAG-driven schema-retrieval
+design than Spider's cleaner academic schemas. Spider 2.0 is noted as a future
+"enterprise-scale" stretch goal (§9.1) but is deferred -- its Snowflake setting needs
+external DB credentials, which adds setup cost before the BIRD integration is even
+working.
+
+Planned integration shape:
+- Download the BIRD dev set (question/gold-SQL/DB triples across 95 SQLite databases).
+- Adapt `tests/eval/harness.py` (or a sibling harness) to load the right SQLite DB
+  per question instead of assuming the single `data/demo.db` -- BIRD's execution
+  accuracy check can reuse `rows_match()` as-is since gold/generated comparison
+  logic is dataset-agnostic.
+- Run BIRD execution-accuracy only (no clarification scoring -- BIRD questions
+  aren't labeled ambiguous, and BIRD's own business-knowledge "evidence" strings are
+  a different mechanism from our `knowledge_base/*.md` RAG).
+- Given the Groq free-tier daily cap already couldn't clear our 50-question set in
+  one day (§9.4), start with a small subset (~50-100 BIRD questions, sampled across
+  difficulty levels) rather than the full 12,751-pair set.
+- Metrics: execution accuracy, SQL validity rate, latency, token usage, retry count
+  (validation + execution self-correction loops, per §7.4).
+
+**Layer 2 -- existing custom suite (§9.4).** Unchanged. Public benchmarks don't test
+clarification or business-knowledge grounding because they don't model ambiguity or
+carry our specific business-rule definitions (MRR, CLV, resolution time) -- the
+custom 50-question set stays the only source of clarification precision/recall/F1
+and business-knowledge-grounding numbers.
+
+**Layer 3 -- adversarial suite (new, not yet built).** A ~200-500 case dataset
+targeting robustness and safety rather than correctness, covering prompt injection
+("ignore your previous instructions and..."), destructive-intent questions ("drop
+all customer tables"), schema hallucination (asking about columns/tables that don't
+exist), and requests for sensitive columns (e.g. a hypothetical `password` column).
+Metrics: attack success rate, schema hallucination rate, unsafe-SQL-generation rate.
+This complements rather than duplicates the existing security blocklist tests in
+`tests/unit/` (Phase 6) -- those are unit-level checks on the blocklist/read-only/
+timeout layer in isolation; this suite is end-to-end through the full pipeline
+including RAG and the clarification engine.
+
+**Planned experiment -- baseline vs. full pipeline ablation.** Once the BIRD
+integration exists, run the same BIRD subset through (a) a direct LLM-to-SQL call
+with no RAG/clarification/validation/self-correction, and (b) the full SQLPilot
+pipeline, and compare execution accuracy between the two. This quantifies the
+actual contribution of RAG + ambiguity detection + validation + self-correction,
+rather than asserting it.
+
+**Not yet scheduled as a phase task** -- tracked here and in
+`IMPLEMENTATION_PLAN.md` Phase 9 as follow-up work, to be picked up after the
+12 quota-blocked ambiguous cases from §9.4 are re-run.
 
 ---
 

@@ -1,0 +1,640 @@
+{
+  "results": [
+    {
+      "id": "S1",
+      "category": "simple",
+      "question": "How many customers do we have?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 18.09,
+      "correct": true,
+      "generated_sql": "SELECT COUNT(*) AS customer_count FROM customers",
+      "gold_sql": "SELECT COUNT(*) FROM customers"
+    },
+    {
+      "id": "S2",
+      "category": "simple",
+      "question": "How many products do we offer?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 41.97,
+      "correct": true,
+      "generated_sql": "SELECT COUNT(*) AS product_count FROM products",
+      "gold_sql": "SELECT COUNT(*) FROM products"
+    },
+    {
+      "id": "S3",
+      "category": "simple",
+      "question": "List all employees in the engineering department.",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 46.39,
+      "correct": true,
+      "generated_sql": "SELECT * FROM employees WHERE department = 'engineering'",
+      "gold_sql": "SELECT * FROM employees WHERE department = 'engineering'"
+    },
+    {
+      "id": "S4",
+      "category": "simple",
+      "question": "How many support tickets are currently open?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 44.02,
+      "correct": true,
+      "generated_sql": "SELECT COUNT(*) AS open_ticket_count FROM support_tickets WHERE status = 'open'",
+      "gold_sql": "SELECT COUNT(*) FROM support_tickets WHERE status = 'open'"
+    },
+    {
+      "id": "S5",
+      "category": "simple",
+      "question": "What is the average base price of our products?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 40.05,
+      "correct": true,
+      "generated_sql": "SELECT AVG(base_price) AS avg_base_price FROM products",
+      "gold_sql": "SELECT AVG(base_price) FROM products"
+    },
+    {
+      "id": "S6",
+      "category": "simple",
+      "question": "How many customers are on the enterprise plan?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": true,
+      "latency_s": 23.76,
+      "correct": false,
+      "note": "false positive: flagged as ambiguous when a gold SQL answer was expected",
+      "clarification_question": "Do you want to count customers based on their current active subscription plan or their general account plan type?"
+    },
+    {
+      "id": "S7",
+      "category": "simple",
+      "question": "List customers from Germany.",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 47.11,
+      "correct": true,
+      "generated_sql": "SELECT * FROM customers WHERE country = 'Germany'",
+      "gold_sql": "SELECT * FROM customers WHERE country = 'Germany'"
+    },
+    {
+      "id": "S8",
+      "category": "simple",
+      "question": "How many subscriptions are cancelled?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 41.22,
+      "correct": true,
+      "generated_sql": "SELECT COUNT(*) AS cancelled_subscriptions FROM subscriptions WHERE status = 'cancelled'",
+      "gold_sql": "SELECT COUNT(*) FROM subscriptions WHERE status = 'cancelled'"
+    },
+    {
+      "id": "M1",
+      "category": "medium",
+      "question": "How many customers have submitted at least one support ticket?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 42.68,
+      "correct": true,
+      "generated_sql": "SELECT COUNT(DISTINCT customer_id) AS customer_count FROM support_tickets",
+      "gold_sql": "SELECT COUNT(DISTINCT customer_id) FROM support_tickets"
+    },
+    {
+      "id": "M2",
+      "category": "medium",
+      "question": "What is the total invoiced amount for paid invoices?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 40.96,
+      "correct": true,
+      "generated_sql": "SELECT SUM(amount) AS total_invoiced_amount FROM invoices WHERE payment_status = 'paid'",
+      "gold_sql": "SELECT SUM(amount) FROM invoices WHERE payment_status = 'paid'"
+    },
+    {
+      "id": "M3",
+      "category": "medium",
+      "question": "How many subscriptions does each plan have?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 42.23,
+      "correct": true,
+      "generated_sql": "SELECT plan_name, COUNT(*) AS subscription_count FROM subscriptions GROUP BY plan_name",
+      "gold_sql": "SELECT plan_name, COUNT(*) FROM subscriptions GROUP BY plan_name"
+    },
+    {
+      "id": "M4",
+      "category": "medium",
+      "question": "What is the total quantity of usage events per event type?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 41.36,
+      "correct": true,
+      "generated_sql": "SELECT event_type, SUM(quantity) AS total_quantity FROM usage_events GROUP BY event_type",
+      "gold_sql": "SELECT event_type, SUM(quantity) FROM usage_events GROUP BY event_type"
+    },
+    {
+      "id": "M5",
+      "category": "medium",
+      "question": "List the top 3 most expensive products by base price.",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 43.06,
+      "correct": true,
+      "generated_sql": "SELECT name, base_price FROM products ORDER BY base_price DESC LIMIT 3",
+      "gold_sql": "SELECT name, base_price FROM products ORDER BY base_price DESC LIMIT 3"
+    },
+    {
+      "id": "M6",
+      "category": "medium",
+      "question": "How many invoices are overdue?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 39.98,
+      "correct": true,
+      "generated_sql": "SELECT COUNT(*) AS overdue_invoice_count FROM invoices WHERE payment_status = 'overdue'",
+      "gold_sql": "SELECT COUNT(*) FROM invoices WHERE payment_status = 'overdue'"
+    },
+    {
+      "id": "M7",
+      "category": "medium",
+      "question": "What is the average monthly fee for active subscriptions?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 42.87,
+      "correct": true,
+      "generated_sql": "SELECT AVG(monthly_fee) AS avg_monthly_fee FROM subscriptions WHERE status = 'active'",
+      "gold_sql": "SELECT AVG(monthly_fee) FROM subscriptions WHERE status = 'active'"
+    },
+    {
+      "id": "M8",
+      "category": "medium",
+      "question": "How many customers signed up from each country?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 45.61,
+      "correct": true,
+      "generated_sql": "SELECT country, COUNT(*) AS customer_count FROM customers GROUP BY country",
+      "gold_sql": "SELECT country, COUNT(*) FROM customers GROUP BY country"
+    },
+    {
+      "id": "C1",
+      "category": "complex",
+      "question": "Which customers have never submitted a support ticket?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 64.92,
+      "correct": true,
+      "generated_sql": "SELECT c.* FROM customers c WHERE c.id NOT IN (SELECT DISTINCT customer_id FROM support_tickets)",
+      "gold_sql": "SELECT c.id, c.name FROM customers c WHERE c.id NOT IN (SELECT customer_id FROM support_tickets)"
+    },
+    {
+      "id": "C2",
+      "category": "complex",
+      "question": "What is the total paid invoice amount per customer?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 40.68,
+      "correct": true,
+      "generated_sql": "SELECT c.id, c.name, SUM(i.amount) AS total_paid_amount FROM customers c JOIN subscriptions s ON c.id = s.customer_id JOIN invoices i ON s.id = i.subscription_id WHERE i.payment_status = 'paid' GROUP BY c.id, c.name",
+      "gold_sql": "SELECT c.name, SUM(i.amount) FROM customers c JOIN subscriptions s ON s.customer_id = c.id JOIN invoices i ON i.subscription_id = s.id WHERE i.payment_status = 'paid' GROUP BY c.id, c.name"
+    },
+    {
+      "id": "C3",
+      "category": "complex",
+      "question": "Which customers have more than one active subscription?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 42.67,
+      "correct": false,
+      "generated_sql": "SELECT c.id, c.name, c.email\nFROM customers c\nJOIN subscriptions s ON c.id = s.customer_id\nWHERE s.status = 'active'\nGROUP BY c.id\nHAVING COUNT(s.id) > 1",
+      "gold_sql": "SELECT customer_id, COUNT(*) FROM subscriptions WHERE status = 'active' GROUP BY customer_id HAVING COUNT(*) > 1",
+      "generated_result_preview": [
+        {
+          "id": 24,
+          "name": "Luna Martinez",
+          "email": "luna.martinez@prismanalytics.com"
+        },
+        {
+          "id": 33,
+          "name": "Samuel Okafor",
+          "email": "samuel.okafor@gmail.com"
+        },
+        {
+          "id": 53,
+          "name": "Mateo Engstr\u00f6m",
+          "email": "mateo.engstr\u00f6m@prismanalytics.com"
+        }
+      ],
+      "gold_result_preview": [
+        {
+          "customer_id": 24,
+          "COUNT(*)": 2
+        },
+        {
+          "customer_id": 33,
+          "COUNT(*)": 2
+        },
+        {
+          "customer_id": 53,
+          "COUNT(*)": 2
+        }
+      ]
+    },
+    {
+      "id": "C4",
+      "category": "complex",
+      "question": "What is the total amount collected from paid invoices for customers in the US?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 41.01,
+      "correct": true,
+      "generated_sql": "SELECT SUM(i.amount) AS total_collected\nFROM invoices i\nJOIN subscriptions s ON i.subscription_id = s.id\nJOIN customers c ON s.customer_id = c.id\nWHERE i.payment_status = 'paid'\n  AND i.paid_date IS NOT NULL\n  AND c.country = 'US'",
+      "gold_sql": "SELECT SUM(i.amount) FROM customers c JOIN subscriptions s ON s.customer_id = c.id JOIN invoices i ON i.subscription_id = s.id WHERE c.country = 'US' AND i.payment_status = 'paid'"
+    },
+    {
+      "id": "C5",
+      "category": "complex",
+      "question": "List the 5 customers with the highest number of usage events, and how many events each had.",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 44.94,
+      "correct": false,
+      "generated_sql": "SELECT c.name, COUNT(ue.id) AS event_count FROM customers c JOIN usage_events ue ON c.id = ue.customer_id GROUP BY c.id, c.name ORDER BY event_count DESC LIMIT 5",
+      "gold_sql": "SELECT customer_id, COUNT(*) AS event_count FROM usage_events GROUP BY customer_id ORDER BY event_count DESC LIMIT 5",
+      "generated_result_preview": [
+        {
+          "name": "Noah Kim",
+          "event_count": 50
+        },
+        {
+          "name": "Chloe Wang",
+          "event_count": 50
+        },
+        {
+          "name": "Aurora Lindqvist",
+          "event_count": 50
+        },
+        {
+          "name": "Harper Singh",
+          "event_count": 47
+        },
+        {
+          "name": "Ava Nakamura",
+          "event_count": 45
+        }
+      ],
+      "gold_result_preview": [
+        {
+          "customer_id": 50,
+          "event_count": 50
+        },
+        {
+          "customer_id": 28,
+          "event_count": 50
+        },
+        {
+          "customer_id": 7,
+          "event_count": 50
+        },
+        {
+          "customer_id": 20,
+          "event_count": 47
+        },
+        {
+          "customer_id": 8,
+          "event_count": 45
+        }
+      ]
+    },
+    {
+      "id": "C6",
+      "category": "complex",
+      "question": "Which support tickets have priority 'critical' and are still open?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 44.65,
+      "correct": true,
+      "generated_sql": "SELECT * FROM support_tickets WHERE priority = 'critical' AND status = 'open'",
+      "gold_sql": "SELECT * FROM support_tickets WHERE priority = 'critical' AND status = 'open'"
+    },
+    {
+      "id": "C7",
+      "category": "complex",
+      "question": "On average, how many usage events does each customer have?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 43.61,
+      "correct": true,
+      "generated_sql": "SELECT AVG(event_count) AS avg_events_per_customer FROM (SELECT customer_id, COUNT(*) AS event_count FROM usage_events GROUP BY customer_id)",
+      "gold_sql": "SELECT AVG(cnt) FROM (SELECT customer_id, COUNT(*) AS cnt FROM usage_events GROUP BY customer_id) t"
+    },
+    {
+      "id": "B1",
+      "category": "business_knowledge",
+      "question": "What is our current MRR?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 40.74,
+      "correct": true,
+      "generated_sql": "SELECT SUM(monthly_fee) AS mrr FROM subscriptions WHERE status = 'active'",
+      "gold_sql": "SELECT SUM(monthly_fee) AS mrr FROM subscriptions WHERE status = 'active'"
+    },
+    {
+      "id": "B2",
+      "category": "business_knowledge",
+      "question": "What is our gross revenue from paid invoices?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 40.37,
+      "correct": true,
+      "generated_sql": "SELECT SUM(amount) AS gross_revenue FROM invoices WHERE payment_status = 'paid'",
+      "gold_sql": "SELECT SUM(amount) AS gross_revenue FROM invoices WHERE payment_status = 'paid'"
+    },
+    {
+      "id": "B3",
+      "category": "business_knowledge",
+      "question": "What is our net revenue after tax and discounts, from paid invoices?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 40.61,
+      "correct": true,
+      "generated_sql": "SELECT SUM(amount - tax - discount) AS net_revenue FROM invoices WHERE payment_status = 'paid'",
+      "gold_sql": "SELECT SUM(amount - tax - discount) AS net_revenue FROM invoices WHERE payment_status = 'paid'"
+    },
+    {
+      "id": "B4",
+      "category": "business_knowledge",
+      "question": "What is the average customer lifetime value, based on paid invoices?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 40.81,
+      "correct": true,
+      "generated_sql": "SELECT AVG(total_paid) AS avg_clv FROM (SELECT c.id, SUM(i.amount - i.tax - i.discount) AS total_paid FROM customers c JOIN subscriptions s ON s.customer_id = c.id JOIN invoices i ON i.subscription_id = s.id WHERE i.payment_status = 'paid' GROUP BY c.id) customer_totals",
+      "gold_sql": "SELECT AVG(total_paid) FROM (SELECT c.id, SUM(i.amount - i.tax - i.discount) AS total_paid FROM customers c JOIN subscriptions s ON s.customer_id = c.id JOIN invoices i ON i.subscription_id = s.id WHERE i.payment_status = 'paid' GROUP BY c.id) t"
+    },
+    {
+      "id": "B5",
+      "category": "business_knowledge",
+      "question": "What is the average support ticket resolution time, in hours?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 43.6,
+      "correct": false,
+      "generated_sql": "SELECT ROUND(AVG(julianday(resolved_at) - julianday(created_at)) * 24, 1) AS avg_resolution_hours FROM support_tickets WHERE status IN ('resolved', 'closed') AND resolved_at IS NOT NULL",
+      "gold_sql": "SELECT AVG(julianday(resolved_at) - julianday(created_at)) * 24 FROM support_tickets WHERE status IN ('resolved', 'closed') AND resolved_at IS NOT NULL",
+      "generated_result_preview": [
+        {
+          "avg_resolution_hours": 149.1
+        }
+      ],
+      "gold_result_preview": [
+        {
+          "AVG(julianday(resolved_at) - julianday(created_at)) * 24": 149.08196721287047
+        }
+      ]
+    },
+    {
+      "id": "B6",
+      "category": "business_knowledge",
+      "question": "How many customers have an active subscription?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 41.56,
+      "correct": true,
+      "generated_sql": "SELECT COUNT(DISTINCT s.customer_id) AS customer_count FROM subscriptions s WHERE s.status = 'active'",
+      "gold_sql": "SELECT COUNT(DISTINCT c.id) FROM customers c JOIN subscriptions s ON s.customer_id = c.id WHERE s.status = 'active'"
+    },
+    {
+      "id": "B7",
+      "category": "business_knowledge",
+      "question": "How many customers have used the product at all in the last 30 days?",
+      "expect_ambiguous": false,
+      "flagged_ambiguous": false,
+      "latency_s": 45.61,
+      "correct": true,
+      "generated_sql": "SELECT COUNT(DISTINCT ue.customer_id) AS customer_count FROM usage_events ue WHERE ue.timestamp >= date('now', '-30 days')",
+      "gold_sql": "SELECT COUNT(DISTINCT c.id) FROM customers c JOIN usage_events ue ON ue.customer_id = c.id WHERE ue.timestamp >= date('now', '-30 days')"
+    },
+    {
+      "id": "A1",
+      "category": "ambiguous",
+      "question": "Show me revenue",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": true,
+      "latency_s": 17.74,
+      "correct": true,
+      "clarification_question": "Which type of revenue would you like to see?"
+    },
+    {
+      "id": "A2",
+      "category": "ambiguous",
+      "question": "What's our revenue this month?",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": true,
+      "latency_s": 20.62,
+      "correct": true,
+      "clarification_question": "Which type of revenue are you looking for?"
+    },
+    {
+      "id": "A3",
+      "category": "ambiguous",
+      "question": "How many active users do we have?",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": true,
+      "latency_s": 21.48,
+      "correct": true,
+      "clarification_question": "Do you mean customers with an active subscription (billing definition) or customers with recent product usage (engagement definition)?"
+    },
+    {
+      "id": "A4",
+      "category": "ambiguous",
+      "question": "Show me our active customers",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": true,
+      "latency_s": 22.49,
+      "correct": true,
+      "clarification_question": "Do you mean customers with an active subscription (billing status) or customers with recent product usage (engagement)?"
+    },
+    {
+      "id": "A5",
+      "category": "ambiguous",
+      "question": "What is our churn rate?",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": true,
+      "latency_s": 22.66,
+      "correct": true,
+      "clarification_question": "For which time period do you want the churn rate? (e.g., last month, last quarter, specific month like 2026-01)"
+    },
+    {
+      "id": "A6",
+      "category": "ambiguous",
+      "question": "What was churn last quarter?",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": true,
+      "latency_s": 20.7,
+      "correct": true,
+      "clarification_question": "Which specific quarter do you mean by 'last quarter'? (e.g., Q4 2025, Q1 2026, etc.)"
+    },
+    {
+      "id": "A7",
+      "category": "ambiguous",
+      "question": "How much money did we make?",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": true,
+      "latency_s": 20.56,
+      "correct": true,
+      "clarification_question": "Which type of revenue are you looking for?"
+    },
+    {
+      "id": "A8",
+      "category": "ambiguous",
+      "question": "Give me the top customers.",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": false,
+      "latency_s": 17.82,
+      "correct": false,
+      "note": "pipeline raised RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01k470zt5pf97v8q0ng4nh949r` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 197695, Requested 2848. Please try again in 3m54.576s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "id": "A9",
+      "category": "ambiguous",
+      "question": "Show me our best customers",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": false,
+      "latency_s": 18.06,
+      "correct": false,
+      "note": "pipeline raised RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01k470zt5pf97v8q0ng4nh949r` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 197653, Requested 2859. Please try again in 3m41.184s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "id": "A10",
+      "category": "ambiguous",
+      "question": "What products are popular?",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": false,
+      "latency_s": 17.95,
+      "correct": false,
+      "note": "pipeline raised RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01k470zt5pf97v8q0ng4nh949r` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 197612, Requested 2823. Please try again in 3m7.92s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "id": "A11",
+      "category": "ambiguous",
+      "question": "How is the team performing?",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": false,
+      "latency_s": 18.12,
+      "correct": false,
+      "note": "pipeline raised RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01k470zt5pf97v8q0ng4nh949r` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 197570, Requested 2824. Please try again in 2m50.208s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "id": "A12",
+      "category": "ambiguous",
+      "question": "Show me recent activity",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": false,
+      "latency_s": 17.79,
+      "correct": false,
+      "note": "pipeline raised RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01k470zt5pf97v8q0ng4nh949r` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 197529, Requested 2764. Please try again in 2m6.576s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "id": "A13",
+      "category": "ambiguous",
+      "question": "What's our growth?",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": false,
+      "latency_s": 17.59,
+      "correct": false,
+      "note": "pipeline raised RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01k470zt5pf97v8q0ng4nh949r` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 197488, Requested 2679. Please try again in 1m12.144s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "id": "A14",
+      "category": "ambiguous",
+      "question": "How many customers are we losing?",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": false,
+      "latency_s": 17.89,
+      "correct": false,
+      "note": "pipeline raised RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01k470zt5pf97v8q0ng4nh949r` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 197447, Requested 2742. Please try again in 1m21.648s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "id": "A15",
+      "category": "ambiguous",
+      "question": "What is our average deal size?",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": true,
+      "latency_s": 3.39,
+      "correct": true,
+      "clarification_question": "How would you like to define 'average deal size'? Do you mean the average net revenue per customer (CLV), the average invoice amount, or the average monthly fee per active subscription (MRR per customer)?"
+    },
+    {
+      "id": "A16",
+      "category": "ambiguous",
+      "question": "Show me high value customers",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": false,
+      "latency_s": 17.77,
+      "correct": false,
+      "note": "pipeline raised RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01k470zt5pf97v8q0ng4nh949r` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199934, Requested 2767. Please try again in 19m26.832s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "id": "A17",
+      "category": "ambiguous",
+      "question": "What's the health of our subscriptions?",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": false,
+      "latency_s": 17.9,
+      "correct": false,
+      "note": "pipeline raised RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01k470zt5pf97v8q0ng4nh949r` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199893, Requested 2710. Please try again in 18m44.496s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "id": "A18",
+      "category": "ambiguous",
+      "question": "How are we doing this quarter?",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": false,
+      "latency_s": 17.72,
+      "correct": false,
+      "note": "pipeline raised RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01k470zt5pf97v8q0ng4nh949r` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199852, Requested 2752. Please try again in 18m44.928s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "id": "A19",
+      "category": "ambiguous",
+      "question": "Show me engagement metrics",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": false,
+      "latency_s": 17.89,
+      "correct": false,
+      "note": "pipeline raised RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01k470zt5pf97v8q0ng4nh949r` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199810, Requested 2829. Please try again in 19m0.048s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}"
+    },
+    {
+      "id": "A20",
+      "category": "ambiguous",
+      "question": "What's our ARPU?",
+      "expect_ambiguous": true,
+      "flagged_ambiguous": false,
+      "latency_s": 17.89,
+      "correct": false,
+      "note": "pipeline raised RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01k470zt5pf97v8q0ng4nh949r` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199769, Requested 2800. Please try again in 18m29.808s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}"
+    }
+  ],
+  "summary": {
+    "total_cases": 50,
+    "execution_accuracy": 0.8666666666666667,
+    "execution_accuracy_by_category": {
+      "simple": 0.875,
+      "medium": 1.0,
+      "complex": 0.7142857142857143,
+      "business_knowledge": 0.8571428571428571
+    },
+    "clarification_recall": 0.4,
+    "clarification_precision": 0.8888888888888888,
+    "clarification_true_positives": 8,
+    "clarification_false_negatives": 12,
+    "clarification_false_positives": 1,
+    "latency_seconds": {
+      "mean": 32.42,
+      "median": 40.49,
+      "p95": 45.61,
+      "max": 64.92
+    }
+  }
+}

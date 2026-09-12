@@ -4,10 +4,10 @@ langchain-core>=0.3.0
 
 # LLM providers
 google-genai>=1.0.0
+groq>=1.0.0
 
-# RAG
+# RAG -- chromadb bundles its own ONNX MiniLM embedder, no torch needed
 chromadb>=0.6.0
-sentence-transformers>=3.0.0
 
 # SQL validation
 sqlglot>=26.0.0

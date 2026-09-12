@@ -31,6 +31,17 @@ if "messages" not in st.session_state:
 if "pending_clarification" not in st.session_state:
     st.session_state.pending_clarification = None  # QueryResponse dict when awaiting an answer
 
+@st.cache_data(ttl=300, show_spinner=False)
+def _fetch_schema() -> dict:
+    """GET the introspected schema the backend grounds SQL generation on."""
+    try:
+        resp = httpx.get(f"{API_BASE_URL}/schema", timeout=30.0)
+        resp.raise_for_status()
+        return resp.json()
+    except httpx.HTTPError as e:
+        return {"error": f"Could not load schema from {API_BASE_URL}: {e}"}
+
+
 with st.sidebar:
     st.subheader("Session")
     st.caption(f"`{st.session_state.session_id}`")
@@ -39,6 +50,20 @@ with st.sidebar:
         st.session_state.messages = []
         st.session_state.pending_clarification = None
         st.rerun()
+
+    st.divider()
+    st.subheader("Database")
+    st.caption("The demo runs on a synthetic SaaS dataset. These are the tables you can ask about.")
+
+    schema = _fetch_schema()
+    if schema.get("error"):
+        st.warning(schema["error"])
+    else:
+        tables = schema.get("tables", [])
+        st.caption(f"{len(tables)} tables · {sum(t['row_count'] for t in tables):,} rows total")
+        for table in tables:
+            with st.expander(f"{table['table_name']} ({table['row_count']:,} rows)"):
+                st.code(table["content"], language="text")
 
 
 def _call_api(path: str, payload: dict) -> dict:
@@ -57,6 +82,16 @@ def _call_api(path: str, payload: dict) -> dict:
         return {"status": "error", "error": f"Could not reach SQLPilot API at {API_BASE_URL}: {e}"}
 
 
+def _escape_markdown_math(text: str) -> str:
+    """
+    Escape dollar signs so st.write doesn't read currency as LaTeX.
+
+    Explanations are full of amounts like "$3,023.20 ... $2,760.48", and a pair
+    of them makes Streamlit render everything in between as math.
+    """
+    return text.replace("$", r"\$")
+
+
 def _render_result(result: dict) -> None:
     """render one assistant turn's SQL / results table / explanation / error."""
     if result.get("sql"):
@@ -70,7 +105,7 @@ def _render_result(result: dict) -> None:
         else:
             st.caption("(no rows returned)")
     if result.get("explanation"):
-        st.write(result["explanation"])
+        st.write(_escape_markdown_math(result["explanation"]))
     if result.get("error"):
         st.error(result["error"])
 

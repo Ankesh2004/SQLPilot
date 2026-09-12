@@ -4,9 +4,13 @@ A text-to-SQL agent that **asks before it guesses**. Built with LangGraph, Chrom
 
 Ask a question in plain English, and SQLPilot retrieves the right schema and business context, checks whether your question is actually answerable without guessing, generates dialect-aware SQL, validates and self-corrects it before it ever touches the database, runs it in a locked-down read-only sandbox, and explains the result back to you in plain English — all while every step is traced for observability.
 
+```bash
+docker compose up --build      # UI at localhost:8501, API docs at localhost:8000/docs
 ```
-python -m app.cli "What are the top 5 customers by revenue?"
-```
+
+![SQLPilot demo](docs/demo.gif)
+
+*"Show me revenue" is ambiguous, so SQLPilot asks which revenue you mean before writing any SQL — then answers the follow-up question directly.*
 
 ---
 
@@ -22,6 +26,8 @@ python -m app.cli "What are the top 5 customers by revenue?"
 - [Evaluation & Benchmarks](#-evaluation--benchmarks)
 - [Project Status](#-project-status)
 - [Getting Started](#-getting-started)
+- [Testing](#-testing)
+- [Deployment](#-deployment)
 - [Project Structure](#-project-structure)
 
 ---
@@ -85,7 +91,7 @@ Every node in this graph is wrapped as a Langfuse span, and every LLM call insid
 |---|---|---|
 | **Orchestrator** | LangGraph | Deterministic state machine with two retry loops and a clarification exit |
 | **LLM** | Gemini Flash *or* Groq (provider-agnostic) | Swappable via `LLM_PROVIDER` in `.env` — same interface, no code changes |
-| **Context engine (RAG)** | ChromaDB (in-process, persistent) + sentence-transformers (`all-MiniLM-L6-v2`, local, free) | Retrieves schema chunks + business-rule docs relevant to the question |
+| **Context engine (RAG)** | ChromaDB (in-process, persistent), with its bundled ONNX `all-MiniLM-L6-v2` embedder (local, free, no torch) | Retrieves schema chunks + business-rule docs relevant to the question |
 | **Validation** | SQLGlot | Offline parse + AST mutation scan, dialect-aware (SQLite/Postgres/MySQL) |
 | **Database sandbox** | SQLite (demo) | Read-only via `PRAGMA query_only`, statement timeout, row cap |
 | **Security** | Custom | Keyword + AST blocklist, in-memory sliding-window rate limiter |
@@ -170,18 +176,20 @@ There's also a plain CLI (`app/cli.py`) that needs neither the API nor the front
 
 An internal eval set of **50 hand-built question/gold-SQL pairs** against the demo schema lives at `tests/eval/dataset.json` — 8 simple, 8 medium, 7 complex, 7 requiring business knowledge (grounded in `knowledge_base/*.md`), and 20 designed to be ambiguous. The harness (`tests/eval/harness.py`, run via `python scripts/run_eval.py`) runs each through the live pipeline and measures execution accuracy (order/column-name-independent result comparison), clarification precision/recall, and latency.
 
-**Status: a partial run has been completed** (2026-09-08) — the free-tier Groq daily token cap (200K TPD) was exhausted 18 cases in, before reaching the business-knowledge or ambiguous categories:
+**Status: a full run has been completed** (2026-09-11) — all 50 cases reached, though the last 12 of 20 ambiguous cases hit the same free-tier Groq daily token cap (200K TPD) near the end and failed with a rate-limit error rather than a model answer, so clarification recall below is understated:
 
 | Category | Cases run | Execution accuracy |
 |---|---|---|
 | simple | 8/8 | 87.5% (7/8) |
 | medium | 8/8 | 100% (8/8) |
-| complex | 2/7 | 100% (2/2) |
-| business_knowledge | 0/7 | not yet measured |
-| ambiguous | 0/20 | not yet measured (clarification precision/recall pending) |
-| **Overall (non-ambiguous only)** | **18/30** | **94.4%** |
+| complex | 7/7 | 71.4% (5/7) |
+| business_knowledge | 7/7 | 85.7% (6/7) |
+| ambiguous | 20/20 (8 answered, 12 quota-blocked) | recall 40%, precision 88.9% |
+| **Overall (non-ambiguous only)** | **30/30** | **86.7%** |
 
-The one failure was a false-positive clarification on an unambiguous single-filter question ("How many customers are on the enterprise plan?") — the clarification engine erring toward over-caution, not a SQL bug. Full breakdown, latency numbers, and identified weak spots are in [`DESIGN.md` §9.4](DESIGN.md#94-internal-eval-results-2026-09-08); the full run (including clarification precision/recall) is pending until the daily quota allows a complete pass.
+Latency: mean 32.4s, median 40.5s, p95 45.6s, max 64.9s. Of the 4 genuine (non-quota) failures, one is a repeat false-positive clarification on an unambiguous single-filter question ("How many customers are on the enterprise plan?"), two are column-choice mismatches where the model picked a different but still-reasonable column than the gold query expected, and one is a rounding mismatch between the generated SQL's own `ROUND()` and the eval's comparison precision. Full breakdown, per-case analysis, and follow-ups are in [`DESIGN.md` §9.4](DESIGN.md#94-internal-eval-results-2026-09-11-full-run); a re-run of the 12 quota-blocked ambiguous cases is pending the next Groq quota reset.
+
+**Planned next:** a three-layer evaluation suite that adds a public benchmark (**BIRD**) and an adversarial/safety dataset alongside this existing custom set, plus a baseline-vs-full-pipeline ablation to quantify what RAG + clarification + validation actually contribute. See [`DESIGN.md` §9.5](DESIGN.md#95-planned-three-layer-evaluation-suite-public-benchmark--custom--adversarial) and the Phase 9 follow-up tasks in [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) for the full plan — not yet started.
 
 ---
 
@@ -198,8 +206,8 @@ The one failure was a false-positive clarification on an unambiguous single-filt
 | 6 | Security & Sandbox | ✅ Done |
 | 7 | Observability | ✅ Done |
 | 8 | API & Interface | ✅ Done |
-| 9 | Evaluation & Benchmarks | 🟡 Partial (harness done, full run pending) |
-| 10 | Deployment | 🔲 Not started |
+| 9 | Evaluation & Benchmarks | 🟡 Full run done, 12 ambiguous cases pending quota reset |
+| 10 | Deployment | ✅ Done |
 
 See [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) for the full task-level breakdown of every phase, and [`DESIGN.md`](DESIGN.md) for the architecture decisions and rationale behind them.
 
@@ -208,42 +216,98 @@ See [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) for the full task-level b
 ## 🚀 Getting Started
 
 ### Prerequisites
-* Python 3.11+
-* Access to an LLM provider (Gemini or Groq — see `.env.example`)
+* An LLM provider key (Gemini or Groq — see `.env.example`)
+* Either Docker, or Python 3.11+
 * A [Langfuse Cloud](https://cloud.langfuse.com) account (free tier) if you want tracing -- optional, the pipeline runs fine without it
 
-### 1. Install & configure
+### The short way: Docker
+
+```bash
+cp .env.example .env      # fill in GEMINI_API_KEY (or GROQ_API_KEY)
+docker compose up --build
+```
+
+That's it — the API container seeds the demo database and builds the RAG index
+on first boot, then the UI comes up against it. UI at
+<http://localhost:8501>, Swagger docs at <http://localhost:8000/docs>. First
+build takes a few minutes; after that it starts in seconds.
+
+### The long way: from source
+
+#### 1. Install & configure
 ```bash
 pip install -r requirements.txt
 cp .env.example .env   # fill in your LLM + (optional) Langfuse keys
 ```
 
-### 2. Seed the demo database and index RAG
+#### 2. Seed the demo database and index RAG
 ```bash
 python scripts/seed_database.py
 python scripts/index_rag.py
 ```
 
-### 3. Run the API
+#### 3. Run the API
 ```bash
 uvicorn app.main:app --reload --port 8000
 # Swagger docs at http://localhost:8000/docs
 ```
 
-### 4. Run the frontend
+#### 4. Run the frontend
 ```bash
 streamlit run streamlit_app.py
 ```
 
-### Or skip the API/UI entirely and use the CLI
+#### Or skip the API/UI entirely and use the CLI
 ```bash
 python -m app.cli "What are the top 5 customers by revenue?"
 ```
 
-### Run the eval suite
+---
+
+## 🧪 Testing
+
+Two independent layers, because they cost very different things to run:
+
 ```bash
-python scripts/run_eval.py
+pytest tests/unit          # fast, offline, no API key needed
+python scripts/run_eval.py # the 50-case eval suite -- hits a live LLM, burns quota
 ```
+
+`tests/unit/` pins down the parts that must hold regardless of what the model
+says: the SQLGlot validator and all three security layers, the rate limiter,
+and the read-only/timeout/row-cap guarantees enforced at the SQLite connection
+(each verified against a throwaway database, not `data/demo.db`), plus the API's
+status codes and schema endpoint. It needs no API key, so it runs on every PR.
+
+Anything that depends on generated SQL being *correct* lives in the eval
+harness instead — see [Evaluation & Benchmarks](#-evaluation--benchmarks).
+
+**CI** (`.github/workflows/ci.yml`) runs ruff and the unit suite on every PR,
+and separately builds the Docker image and smoke-tests `/health` inside it.
+Lint is advisory for now: the codebase has a pre-existing ruff backlog (mostly
+line length and import order, plus deliberate `E402`s where `load_dotenv()` has
+to run before the app imports).
+
+---
+
+## 🚢 Deployment
+
+| Target | What you get |
+|---|---|
+| **Docker Compose** | API + UI locally, one command, self-bootstrapping |
+| **Render** (free tier) | Public HTTPS API — `render.yaml` blueprint included |
+| **Streamlit Community Cloud** | Public chat UI pointed at your API |
+
+Full walkthrough, environment-variable reference, free-tier caveats, and a
+troubleshooting table: **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+
+One caveat worth repeating here, because it bites in production rather than in
+testing: the rate limiter and the clarification session store are both
+process-local dicts, so the API must run as a **single worker**. With more than
+one, a `/clarify` call can land on a process that never saw the matching
+`/query`. Making it multi-worker means moving both into Redis.
+
+![Clarification in the UI](docs/screenshot-clarification.jpg)
 
 ---
 
@@ -265,7 +329,15 @@ app/
 knowledge_base/     Business-rule markdown files (MRR, churn, CLV, ...)
 scripts/            seed_database.py, index_rag.py, run_eval.py
 streamlit_app.py    Chat frontend
+tests/unit/         Offline tests -- validator, sandbox, rate limiter, API contract
 tests/eval/         Eval dataset, harness, and saved run results
+docker/             Container entrypoint (bootstraps demo data on first boot)
+Dockerfile          Single image, serves both the API and the UI
+docker-compose.yml  One-command local stack
+render.yaml         Render blueprint for the API
+.github/workflows/  CI (lint, tests, image smoke test) and Render deploy trigger
+docs/               Demo GIF and screenshots
 DESIGN.md           Architecture decisions and rationale
+DEPLOYMENT.md       Docker / Render / Streamlit Cloud deployment guide
 IMPLEMENTATION_PLAN.md   Phased task breakdown and status
 ```
