@@ -25,11 +25,11 @@ services:
         value: data/demo.db
       - key: CHROMA_PERSIST_DIR
         value: data/chroma
-      # mirrors .env.example -- switch to groq here if that's your provider
+      # switch to gemini here if that's your provider (set GEMINI_API_KEY too)
       - key: LLM_PROVIDER
-        value: gemini
+        value: groq
       - key: LLM_MODEL
-        value: gemini-2.0-flash
+        value: openai/gpt-oss-120b
       - key: LOG_LEVEL
         value: INFO
       # secrets -- set these in the Render dashboard, never in this file
